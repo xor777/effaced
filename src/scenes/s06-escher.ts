@@ -89,7 +89,7 @@ export function createEscher(g: Gfx): Scene {
   let cT: Target | null = null;
   let cityDone = false;
   let snap: Target | null = null;
-  let snapWarm = false;
+  let snapWarm = ''; // size the snapshot was allocated at (by a warm-up frame)
 
   return {
     id: 'S06',
@@ -148,16 +148,19 @@ export function createEscher(g: Gfx): Scene {
         .set('imageK', 1 - 0.75 * smoothstep(7 * BAR, 8 * BAR, τ))
         .set('t', f.t);
       fullscreen(g);
-      // the hand-off to S07: copy the last frames out (once on the first, loader warm-up frame too, so
-      // the blit's pipeline exists before the show)
-      if (hdr && (τ >= 8 * BAR - 0.3 || !snapWarm)) {
+      // the hand-off to S07: copy the last frames out — and once whenever the size changed (the loader's
+      // warm-up frame, a re-warm at another size: fullscreen settling late, the bench), so the snapshot
+      // target and the blit's pipeline exist before the show; a one-shot flag left it to be reallocated
+      // at 0C:61 after a re-warm (a 13 ms frame in the scan)
+      const size = hdr ? `${hdr.w}x${hdr.h}` : '';
+      if (hdr && (τ >= 8 * BAR - 0.3 || snapWarm !== size)) {
         snap = ensureTarget(g, snap, hdr.w, hdr.h, { formats: [gl.RGBA16F] });
         gl.bindFramebuffer(gl.READ_FRAMEBUFFER, hdr.fb);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, snap.fb);
         gl.blitFramebuffer(0, 0, hdr.w, hdr.h, 0, 0, hdr.w, hdr.h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
         bindTarget(g, hdr);
         lastFrame = { tex: snap.tex[0], t: f.t };
-        snapWarm = true;
+        snapWarm = size;
       }
     },
   };

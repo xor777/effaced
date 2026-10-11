@@ -41,7 +41,15 @@ export async function runBench(demo: Demo, size: string | null) {
   await demo.warmup(undefined, true);
   const px = new Uint8Array(4);
   const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-  const yieldUi = () => new Promise((r) => setTimeout(r, 0));
+  // A yield lets the browser present the canvas and repaint the table, and that compositor work hit
+  // the next timed frame: 11 of the 13 one-frame spikes of a whole-show scan (2026-10-11) were the
+  // first frame after a yield (the other two: the S00→S01 cut, S06's snapshot). Let it finish
+  // untimed: two animation frames (50 ms when the page is hidden and rAF doesn't run), then a sync.
+  const yieldUi = () =>
+    new Promise<void>((r) => {
+      const t = setTimeout(r, 50);
+      requestAnimationFrame(() => requestAnimationFrame(() => (clearTimeout(t), r())));
+    }).then(sync);
 
   const out = document.createElement('pre');
   out.style.cssText =
@@ -144,11 +152,18 @@ async function scan(
   const over: { t: number; id: string; ms: number }[] = [];
   const per = new Map<string, number[]>();
   const end = cueEnd(SCRIPT[SCRIPT.length - 1], SCRIPT.length - 1);
+  // &only=S01,S07 scans just those cues (each entered by a jump, like a seek)
+  const only = new URLSearchParams(location.search).get('only')?.toUpperCase().split(',');
   let t = 0, first = true, n = 0;
   while (t < end) {
     let ci = SCRIPT.findIndex((c, i) => t >= cueStart(c) && t < cueEnd(c, i));
     if (ci < 0) ci = SCRIPT.length - 1;
     const id = SCRIPT[ci].scene;
+    if (only && !only.includes(id)) {
+      t = cueEnd(SCRIPT[ci], ci);
+      first = true;
+      continue;
+    }
     const fps = demo.scenes.get(id)?.fps ?? 120;
     const dt = 1 / fps;
     const a = performance.now();

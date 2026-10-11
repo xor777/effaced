@@ -120,6 +120,7 @@ export function createIndra(g: Gfx): Scene {
   const Rr = 1;
   const rpTangent = Rr * Math.sin(Math.PI / 12);
   const P = new Float32Array(36);
+  const NET = new Float32Array(4); // centre xyz, radius
   const E = new Float32Array(24);
   const cas = new Float32Array(16);
   const vis = new Float32Array(12);
@@ -228,6 +229,12 @@ export function createIndra(g: Gfx): Scene {
         const th = Math.PI / 2 - (k * 2 * Math.PI) / 12;
         P.set([Rr * Math.cos(th), Rr * Math.sin(th), H + (k % 2 ? zig : -zig)], k * 3);
       }
+      // a sphere round the whole necklace (with a hair of margin): camera rays that miss it skip the
+      // per-pearl tests in the shader
+      let reach = 0;
+      for (let k = 0; k < 12; k++) reach = Math.max(reach, Math.hypot(P[k * 3], P[k * 3 + 1], P[k * 3 + 2] - H));
+      NET[2] = H;
+      NET[3] = (reach + rp) * 1.001 + 1e-4;
 
       // --- 3D camera: from the unrolled pearl (on the axis, looking up the necklace) out around it and back
       const wander = smoothstep(74, 88, r) * (1 - smoothstep(91, 104, r));
@@ -269,6 +276,7 @@ export function createIndra(g: Gfx): Scene {
         .set('camRot', cam)
         .set('P', P)
         .set('rp', rp)
+        .set('net', NET)
         .set('E', E)
         .set('delay', MIRROR_ROWS * ROW)
         .set('bounces', 8)

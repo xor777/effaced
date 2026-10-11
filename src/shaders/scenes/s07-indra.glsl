@@ -36,6 +36,7 @@ uniform vec3 camPos;
 uniform mat3 camRot;        // columns right, up, forward (mirrored basis = we are inside the reflection)
 uniform vec3 P[12];         // pearl centres (index = position on the circle of fifths, C at the top)
 uniform float rp;           // pearl radius
+uniform vec4 net;           // a sphere round all twelve pearls: centre, radius
 uniform vec2 E[12];         // per pearl: seconds since its bell note, amplitude
 uniform float delay;        // seconds of light travel per reflection
 uniform int bounces;
@@ -118,6 +119,9 @@ vec3 glowCol() { return mix(vec3(1.0, 0.96, 0.98), hex2p3(C_BEADED), 0.35); }
 vec3 trace(vec3 ro, vec3 rd, int nb, float win0) {
   vec3 acc = vec3(0.0), thr = vec3(1.0);
   int last = -1;
+  // the room is looked up once, after the loop: rays of one SIMD group leave the net at different
+  // bounces, and inside the loop env() would run once for every bounce at which some ray leaves
+  float win = -1.0;
   for (int b = 0; b < 16; b++) {
     float tm = 1e9;
     int hk = -1;
@@ -131,7 +135,7 @@ vec3 trace(vec3 ro, vec3 rd, int nb, float win0) {
         if (tt > 0.0 && tt < tm) { tm = tt; hk = k; }
       }
     }
-    if (hk < 0 || b >= nb) { acc += thr * env(rd, b == 0 ? win0 : 1.0); break; }
+    if (hk < 0 || b >= nb) { win = b == 0 ? win0 : 1.0; break; }
     vec3 p = ro + rd * tm;
     vec3 n = (p - P[hk]) / rp;
     float ci = clamp(-dot(rd, n), 0.0, 1.0);
@@ -144,6 +148,7 @@ vec3 trace(vec3 ro, vec3 rd, int nb, float win0) {
     last = hk;
     if (max(thr.r, max(thr.g, thr.b)) < 0.01) break;
   }
+  if (win >= 0.0) acc += thr * env(rd, win);
   return acc;
 }
 
@@ -232,8 +237,8 @@ vec3 worldRay(vec2 q) {
   float th = mix(thB, thP, unroll);
   return camRot * vec3(sin(th) * dq, cos(th));
 }
-vec3 worldSample(vec2 q) {
-  vec3 c = trace(camPos, worldRay(q), bounces, 1.0 - unroll);
+// c: what the camera ray at q brings back from the net
+vec3 worldShade(vec2 q, vec3 c) {
   if (unroll < 1.0) {
     // still the surface of the 2D pearl we dived into: its nacre and tint fade as the reflection unrolls
     float rr = min(length(q) / ballR, 1.0);
@@ -242,18 +247,28 @@ vec3 worldSample(vec2 q) {
   }
   return c;
 }
+vec3 worldSample(vec2 q) {
+  return worldShade(q, trace(camPos, worldRay(q), bounces, 1.0 - unroll));
+}
 vec3 world(vec2 q) {
   // pixels that see a pearl (or pass within two pixels of one) are supersampled 4× on a rotated grid:
   // silhouettes and the ever smaller reflections inside the mirrors would alias otherwise
   vec3 rd = worldRay(q);
   float pa = 2.5 / mix(ballR * 0.5, focal, unroll);           // ≈ two pixels, in radians
+  // the whole necklace sits in the sphere `net`: a ray that passes it by more than that margin
+  // cannot come near a pearl, and one test spares it the twelve
+  vec3 ob = camPos - net.xyz;
+  float bn = dot(ob, rd);
+  float rn = net.w + max(net.w - bn, 0.0) * pa;
   bool edge = false;
-  for (int k = 0; k < 12; k++) {
-    vec3 oc = camPos - P[k];
-    float b = dot(oc, rd);
-    if (b < 0.0 && dot(oc, oc) - b * b < (rp - b * pa) * (rp - b * pa)) edge = true;
-  }
-  if (!edge) return worldSample(q);
+  if (dot(ob, ob) - bn * bn <= rn * rn)
+    for (int k = 0; k < 12; k++) {
+      vec3 oc = camPos - P[k];
+      float b = dot(oc, rd);
+      if (b < 0.0 && dot(oc, oc) - b * b < (rp - b * pa) * (rp - b * pa)) edge = true;
+    }
+  // a ray clear of every pearl hits none: it sees the room, which is all trace() would return for it
+  if (!edge) return worldShade(q, env(rd, 1.0 - unroll));
   return 0.25 * (worldSample(q + vec2(0.125, 0.375)) + worldSample(q + vec2(-0.375, 0.125)) +
                  worldSample(q + vec2(-0.125, -0.375)) + worldSample(q + vec2(0.375, -0.125)));
 }

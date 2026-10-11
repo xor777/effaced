@@ -118,9 +118,13 @@ void main() {
     vec4 q = pulse[i];
     if (q.z <= 0.0) continue;
     float d = length(xy - q.xy);
+    float rr = 0.006 + 0.05 * q.w;                                   // a ring opening from the note
+    // all three lights are gaussians: the spark and the ring are < 1e-15 beyond rr + 30 px, the
+    // outline light beyond 8σ (0.2) or 9 line widths off the outline. Most pixels are that far from
+    // every note: they skip it (it was 40 % of the pass in 02, when five notes are always sounding)
+    if (d > rr + 30.0 * px && (d > 0.2 || dL > 9.0 * lw)) continue;
     vec2 cuv = ((q.xy + (W - q.xy) * 0.04 - bakeView.xy) / bpx + 0.5 * res) / res;
     vec3 pc = max(texture(bake, cuv).rgb, 0.0) + 0.25;
-    float rr = 0.006 + 0.05 * q.w;                                   // a ring opening from the note
     c += pc * q.z * (2.5 * exp(-0.5 * d * d / (vr * vr * 0.5))     // the spark
                    + 1.2 * exp(-0.5 * dL * dL / (lw * lw)) * exp(-0.5 * d * d / (0.025 * 0.025))  // the outline lights up
                    + 0.5 * exp(-0.5 * pow((d - rr) / (1.5 * px), 2.0)) * exp(-3.0 * q.w));
