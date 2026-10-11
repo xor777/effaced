@@ -316,8 +316,13 @@ const mpt = await loadOpenMPT();
   let lis = 0;
   for (let i = 0; i < 480; i++) lis += Math.abs(a.r[off + i] - 0.9 * Math.sin(2 * Math.PI * 2 * (((i + off) * 100) / sr)));
   check('scope: morph 900 is the 3:2 Lissajous', lis / 480 < 0.01, `mean |y − sin| ${(lis / 480).toExponential(1)}`);
-  // the sigil's path is ~13 table units long: at 100 Hz that is ≈ 0.025 per sample when the speed is even
-  check('scope: continuous beam, even speed', step < 0.04, `max step ${step.toFixed(4)} per sample at 100 Hz`);
+  // even speed: the largest step stays near the mean step of the table's own path length at 100 Hz
+  // (whatever the sigil is), i.e. no jumps where the beam would skip
+  const t6 = sigilTables()[6];
+  let len = 0;
+  for (let i = 1; i < t6.x.length; i++) len += Math.hypot(t6.x[i] - t6.x[i - 1], t6.y[i] - t6.y[i - 1]);
+  const mean = (len * 100) / sr;
+  check('scope: continuous beam, even speed', step < 1.6 * mean, `max step ${step.toFixed(4)} per sample at 100 Hz, mean ${mean.toFixed(4)}`);
 }
 
 // ---------------------------------------------------------------------------------------------

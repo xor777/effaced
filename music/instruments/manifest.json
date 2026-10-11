@@ -1929,7 +1929,7 @@
     "v0Lufs": null,
     "correctionDb": 0,
     "targetLufs": null,
-    "lufs": -6.42,
+    "lufs": -5.18,
     "peakDb": -0.92,
     "softClipped": 0,
     "shortfallDb": 0
@@ -1945,7 +1945,7 @@
      "loopLength": 5487,
      "loopType": 1,
      "rate": 22086,
-     "lufs": -6.42
+     "lufs": -5.18
     }
    ]
   },

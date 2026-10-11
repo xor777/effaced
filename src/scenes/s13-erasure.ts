@@ -20,7 +20,7 @@ import { type Gfx, type Target, program, ensureTarget, bindTarget, fullscreen, P
 import type { Scene, FrameCtx } from './types.ts';
 import { markerTimes, smoothstep } from '../timeline/events.ts';
 import { ROW, ROWS } from '../timeline/script.ts';
-import { sigilTables } from '../audio/synth/scope.ts';
+import { sigilTables, SIGIL_FULL } from '../audio/synth/scope.ts';
 import { cues, pulse, steps, swell, lastAt, type Ev } from './s12-s13-cues.ts';
 
 const SW = 1024, SH = 768; // 786k walkers, two splatted steps each per frame at 60 Hz…
@@ -368,7 +368,7 @@ export function createErasure(g: Gfx): Scene {
       };
     },
     init() {
-      const tab = sigilTables()[6];
+      const tab = sigilTables()[SIGIL_FULL];
       sigN = tab.x.length - 1;
       const d = new Float32Array(sigN * 2);
       for (let i = 0; i < sigN; i++) (d[2 * i] = tab.x[i]), (d[2 * i + 1] = tab.y[i]);

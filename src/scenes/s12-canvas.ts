@@ -34,7 +34,7 @@ import { type Gfx, type Program, type Target, createGfx, program, ensureTarget, 
 import type { Scene, FrameCtx } from './types.ts';
 import { markerTimes, hit, smoothstep } from '../timeline/events.ts';
 import { ROW, ROWS } from '../timeline/script.ts';
-import { sigilTables } from '../audio/synth/scope.ts';
+import { sigilTables, SIGIL_FULL } from '../audio/synth/scope.ts';
 import { SIGIL_R, SIGIL_COL, BANDS, p3 } from './s13-erasure.ts'; // same sigil size and light, same banded splatting
 import { cues, pulse, swell, type Cues, type Ev } from './s12-s13-cues.ts';
 
@@ -493,7 +493,7 @@ export function createCanvas(g: Gfx): Scene {
       return { bloom: 0.26 + 0.2 * blow, bloomRadius: 1.15, vignette: 0.15, grain: 0.02, exposure: 0.1 + 0.3 * blow, ca: 2.5 * blow, look: [1.1, 1.3, 0, 0] };
     },
     init() {
-      const tab = sigilTables()[6];
+      const tab = sigilTables()[SIGIL_FULL];
       sigN = tab.x.length - 1;
       const d = new Float32Array(sigN * 2);
       for (let i = 0; i < sigN; i++) (d[2 * i] = tab.x[i]), (d[2 * i + 1] = tab.y[i]);

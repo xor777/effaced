@@ -13,27 +13,26 @@ import type { Zone, P } from './synths.ts';
 
 export type Pt = [number, number];
 
-/** the placeholder sigil: outer circle, inscribed triangle, a stem down to a small inner circle */
+/**
+ * The creature's sigil: a square maze — one stroke spiralling in walls around a cell — and the way
+ * out: from the innermost cell a stroke breaks through the walls to the outside and ends in the "+1".
+ * (The director's pick among the prototypes; no circles, no radial symmetry.) The beam needs a closed
+ * loop, so the path runs out to the +1 and back along itself: the retrace adds no new line.
+ */
+export const SIGIL_MAZE: Pt[] = [
+  [-0.55, -0.55], [-0.55, 0.8], [0.8, 0.8], [0.8, -0.8], [-0.35, -0.8], [-0.35, 0.55], [0.55, 0.55],
+  [0.55, -0.55], [-0.1, -0.55], [-0.1, 0.25], [0.25, 0.25], [0.25, -0.2],
+  // the way out: from the innermost cell straight through the walls
+  [0.1, -0.2], [0.1, 0.05], [1.05, 0.05],
+];
 export function sigilPath(): Pt[] {
   const pts: Pt[] = [];
-  const arc = (cx: number, cy: number, r: number, a0: number, a1: number, n = 96) => {
-    for (let i = 0; i <= n; i++) {
-      const a = a0 + ((a1 - a0) * i) / n;
-      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
-    }
+  const line = (a: Pt, b: Pt, n: number) => {
+    for (let i = 0; i < n; i++) pts.push([a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n]);
   };
-  const line = (x0: number, y0: number, x1: number, y1: number, n = 32) => {
-    for (let i = 0; i <= n; i++) pts.push([x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n]);
-  };
-  const h = Math.PI / 2;
-  const s3 = Math.sqrt(3) / 2;
-  arc(0, 0, 1, h, h - TAU, 192); // outer circle, clockwise from the top
-  line(0, 1, -s3, -0.5); // inscribed triangle
-  line(-s3, -0.5, s3, -0.5);
-  line(s3, -0.5, 0, 1);
-  line(0, 1, 0, 0.3); // stem
-  arc(0, 0, 0.3, h, h + TAU, 64); // inner circle ("the +1")
-  line(0, 0.3, 0, 1); // back up: closed
+  const way = [...SIGIL_MAZE, ...SIGIL_MAZE.slice(0, -1).reverse()];
+  for (let i = 0; i < way.length - 1; i++) line(way[i], way[i + 1], Math.max(2, Math.round(Math.hypot(way[i + 1][0] - way[i][0], way[i + 1][1] - way[i][1]) * 48)));
+  pts.push(way[way.length - 1]);
   return pts;
 }
 
@@ -75,19 +74,28 @@ export interface Curve {
 
 const TABLE = 4096;
 let sigilCache: Curve[] | null = null;
+let plusOne: Pt = [0, 0];
+
+/** where the "+1" (the end of the way out) sits in the sigil tables' coordinates */
+export function sigilPlusOne(): Pt {
+  sigilTables();
+  return plusOne;
+}
 
 /**
- * Band-limited sigil tables: level j keeps |k| ≤ 2^j harmonics (j = 0..6, K ≤ 64), with Lanczos
- * σ-factors against Gibbs ringing, scaled into ±1 (ScopeParams.size scales the output). Visuals may use
- * the same tables.
+ * Band-limited sigil tables: level j keeps |k| ≤ 2^j harmonics (j = 0..8, K ≤ 256), with Lanczos
+ * σ-factors against Gibbs ringing, scaled into ±1 (ScopeParams.size scales the output). The audio
+ * picks the highest level under Nyquist (≤ 64 harmonics for the ghost's notes); the visuals use
+ * the top level, SIGIL_FULL, so the maze keeps its corners and its innermost turn.
  */
+export const SIGIL_FULL = 8;
 export function sigilTables(): Curve[] {
   if (sigilCache) return sigilCache;
-  const KMAX = 64;
+  const KMAX = 1 << SIGIL_FULL;
   const { re, im } = contourDft(sigilPath(), KMAX);
   const levels: Curve[] = [];
   let scale = 0;
-  for (let j = 0; j <= 6; j++) {
+  for (let j = 0; j <= SIGIL_FULL; j++) {
     const K = 1 << j;
     const x = new Float32Array(TABLE + 1), y = new Float32Array(TABLE + 1);
     for (let k = -K; k <= K; k++) {
@@ -101,11 +109,13 @@ export function sigilTables(): Curve[] {
         y[t] += cr * s + ci * c;
       }
     }
-    if (j === 6) for (let t = 0; t <= TABLE; t++) scale = Math.max(scale, Math.abs(x[t]), Math.abs(y[t]));
+    if (j === SIGIL_FULL) for (let t = 0; t <= TABLE; t++) scale = Math.max(scale, Math.abs(x[t]), Math.abs(y[t]));
     levels.push({ x, y });
   }
   const g = 1 / scale;
   for (const l of levels) for (let t = 0; t <= TABLE; t++) (l.x[t] *= g), (l.y[t] *= g);
+  const end = SIGIL_MAZE[SIGIL_MAZE.length - 1];
+  plusOne = [(end[0] - re[KMAX]) * g, (end[1] - im[KMAX]) * g];
   return (sigilCache = levels);
 }
 
@@ -165,7 +175,7 @@ export class ScopeSynth {
     const setF = (f: number) => {
       this.f = f;
       const kMax = Math.max(1, Math.floor((0.45 * sr) / Math.max(1, f)));
-      lvlMax = Math.min(6, Math.floor(Math.log2(kMax)));
+      lvlMax = Math.min(SIGIL_FULL, Math.floor(Math.log2(kMax)));
     };
     setF(this.f);
     for (let i = 0; i < n; i++) {

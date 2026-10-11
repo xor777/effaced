@@ -30,7 +30,7 @@ import { sampleWordStrokes, WORD } from '../gfx/glyphs.ts';
 import type { Scene, FrameCtx } from './types.ts';
 import { ROW, ROWS } from '../timeline/script.ts';
 import { CH } from '../music/roster.ts';
-import { sigilTables } from '../audio/synth/scope.ts';
+import { sigilTables, SIGIL_FULL, sigilPlusOne } from '../audio/synth/scope.ts';
 import { toBuffer, hex2rgb, encode3, type Vec3 } from '../perception/color.ts';
 
 const P1C = 0x1c * ROWS;
@@ -76,6 +76,8 @@ export const BEAM = {
   exposure: 1.6,
   energy: 1,
 };
+/** the maze sigil around its +1: scale on screen, and its farthest reach from the +1 in table units */
+const SIGIL_FIT = 0.6, SIGIL_REACH = 2.3;
 /** the point: rest glow once it holds the embers, its fade with the music's tail (6 s hold, 6 s fade) */
 const POINT = { gathered: 0.08, outFrom: S15_SEC - 6, outTo: S15_SEC - 0.3 };
 const TEXT = { at: 9.5, out: 15, fade: 2, text: '65536 + 1', gray: 0.42, sizePx: 12, below: 0.075 };
@@ -195,32 +197,28 @@ export function createPortraitPair(g: Gfx): [Scene, Scene] {
     return { phase, ruler, halo, arrive };
   };
 
-  // ---- the beam (S15): the sigil centred on its inner circle (the +1 ring of the glyph), so it grows out of
-  // the point and collapses into it (scope.ts sigilPath: circle 2π, triangle 3·√3, stem 0.7, inner circle 0.6π,
-  // back up 0.7; arc-length parametrised)
+  // ---- the beam (S15): the sigil — the maze and its way out — centred on its "+1" (the end of the way
+  // out), so it grows out of the light point and collapses back into it
   const tabs = sigilTables();
-  const total = 2 * Math.PI + 3 * Math.sqrt(3) + 0.7 + 0.6 * Math.PI + 0.7;
-  const i0 = Math.round(((2 * Math.PI + 3 * Math.sqrt(3) + 0.7) / total) * TABLE);
-  const i1 = Math.round(((2 * Math.PI + 3 * Math.sqrt(3) + 0.7 + 0.6 * Math.PI) / total) * TABLE);
-  let cx = 0, cy = 0;
-  for (let i = i0; i < i1; i++) (cx += tabs[6].x[i]), (cy += tabs[6].y[i]);
-  cx /= i1 - i0;
-  cy /= i1 - i0;
+  const [cx, cy] = sigilPlusOne();
   const sizeAt = (tc: number) => ss(0, BEAM.growTo, tc) * (1 - ss(BEAM.collapseFrom, BEAM.collapseTo, tc));
   const xy = (tc: number): [number, number] => {
     const grow = ss(0, BEAM.growTo, tc), coll = ss(BEAM.collapseFrom, BEAM.collapseTo, tc);
     const size = grow * (1 - coll);
-    const lv = 6 * Math.pow(size, 0.6); // a circle out of the point, resolving into the sigil (Fourier levels 0 → 6)
-    const j = Math.min(5, Math.floor(lv)), fj = lv - j;
+    // the maze resolving as it grows (Fourier levels 2 → SIGIL_FULL: square from the start, never a circle)
+    const lv = 2 + (SIGIL_FULL - 2) * Math.pow(size, 0.6);
+    const j = Math.min(SIGIL_FULL - 1, Math.floor(lv)), fj = lv - j;
     const ph = tc < BEAM.growTo ? BEAM.fE * tc : BEAM.fE * BEAM.growTo + BEAM.fA * (tc - BEAM.growTo);
     const u = (ph - Math.floor(ph)) * TABLE;
     const k = Math.floor(u), fk = u - k;
     const at = (t: { x: Float32Array; y: Float32Array }, c: 'x' | 'y') => t[c][k] + (t[c][k + 1] - t[c][k]) * fk;
-    const x = at(tabs[j], 'x') + (at(tabs[j + 1], 'x') - at(tabs[j], 'x')) * fj - cx * Math.min(1, lv);
-    const y = at(tabs[j], 'y') + (at(tabs[j + 1], 'y') - at(tabs[j], 'y')) * fj - cy * Math.min(1, lv);
+    const x = at(tabs[j], 'x') + (at(tabs[j + 1], 'x') - at(tabs[j], 'x')) * fj - cx;
+    const y = at(tabs[j], 'y') + (at(tabs[j + 1], 'y') - at(tabs[j], 'y')) * fj - cy;
     const rot = 0.9 * (1 - grow) ** 2 - 1.4 * coll * coll; // unwinding as it grows, winding up as it collapses
     const c = Math.cos(rot), s = Math.sin(rot);
-    return [size * (c * x - s * y), size * (s * x + c * y)];
+    // the maze reaches ~2.2 table units from its +1 (the old circle reached 1): scale it to sit in frame
+    const fit = size * SIGIL_FIT;
+    return [fit * (c * x - s * y), fit * (s * x + c * y)];
   };
   const drawBeam = (f: FrameCtx, tc: number, warm: boolean): Target | null => {
     if (!warm && (tc > BEAM.collapseTo + 1.5 || tc < 0)) return null;
@@ -282,7 +280,7 @@ export function createPortraitPair(g: Gfx): [Scene, Scene] {
       .set('halo', x.halo, (14 * f.h) / 945)
       .set('dither', 1)
       .tex('beamTex', x.beam?.tex[0] ?? null, 1)
-      .set('beamU', x.beam ? 1 : 0, BEAM.exposure, 0.41 * 1.15 * Math.max(sizeAt(f.local), sizeAt(f.local - 0.3)) + 0.03);
+      .set('beamU', x.beam ? 1 : 0, BEAM.exposure, 0.41 * 1.15 * SIGIL_REACH * SIGIL_FIT * Math.max(sizeAt(f.local), sizeAt(f.local - 0.3)) + 0.03);
     fullscreen(g);
   };
 
