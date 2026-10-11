@@ -67,7 +67,7 @@ export class Memories {
     const gl = this.g.gl;
     const target = Math.floor(t * FIRE_RATE);
     let from = this.fireStep;
-    if (jumped || from < 0 || target < from || target - from > 200) from = target - 120; // pre-roll to a steady fire
+    if (jumped || from < 0 || target < from || target - from > 200) from = target - 40; // pre-roll: flames up in 40 steps
     if (target <= from || !this.fireProg.use()) {
       this.fireStep = Math.max(this.fireStep, target);
       return;

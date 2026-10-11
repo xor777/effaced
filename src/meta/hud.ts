@@ -15,8 +15,12 @@ import type { TrackInfo, TrackCell } from '../audio/types.ts';
 
 export const FT_W = 640;
 export const FT_H = 400;
-/** CSS px per FT2 pixel: the raster resolution of the panel (2304 × 1440 CSS px) */
-const U = 3.6;
+/**
+ * CSS px per FT2 pixel: the raster resolution of the panel (1920 × 1200 CSS px). Chrome rasters the
+ * 3D panel on the GPU whenever new tiles come into view or its scale changes: keep it just above
+ * 1:1 for the full-frame shot (08:16–08:47), not more.
+ */
+const U = 3.0;
 /** the top (panels) / bottom (pattern editor) split, as a fraction of the height */
 export const HUD_SPLIT = 176 / FT_H;
 /** the scope grid (FT2 px): 6 × 3 scopes for the 18 channels — drawn by the GL */
@@ -48,6 +52,12 @@ export const FT2 = {
   black: '#000000',
   ghost: '#decade',
 };
+const rgbCache = new Map<string, number[]>();
+const rgb = (h: string): number[] => {
+  let v = rgbCache.get(h);
+  if (!v) rgbCache.set(h, (v = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))));
+  return v;
+};
 /** the gallery's air as the DOM sees it (display-encoded) */
 const HAZE = '#0d0b10';
 
@@ -69,14 +79,15 @@ const CSS = `
 .ft .logo{font-style:italic;letter-spacing:-.04em;color:#fff;text-shadow:.12em .12em 0 ${FT2.desk},-.06em -.06em 0 ${FT2.hi}}
 .ft .clip{overflow:hidden}
 .ft .mv{position:absolute;left:0;top:0;will-change:transform}
-.ft .row{height:calc(var(--u)*${ROWH});line-height:calc(var(--u)*${ROWH});color:${FT2.val};
- background:repeating-linear-gradient(90deg,#000 0 calc(var(--u)*${CHW - 1.6}),${FT2.desk} calc(var(--u)*${CHW - 1.6}) calc(var(--u)*${CHW}))}
+.ft .row{height:calc(var(--u)*${ROWH});line-height:calc(var(--u)*${ROWH});color:${FT2.val}}
+.ft .bk{background:repeating-linear-gradient(90deg,#000 0 ${CHW - 1.6}em,${FT2.desk} ${CHW - 1.6}em ${CHW}em)}
 .ft .row.d{color:${FT2.dim}}
 .ft .rn div div{height:calc(var(--u)*${ROWH});line-height:calc(var(--u)*${ROWH});text-align:center;color:${FT2.val}}
 .ft .rn .w{color:#fff}
 .ft .rn .d{color:${FT2.dim}}
-.ft .band{background:${FT2.desk};mix-blend-mode:screen}
-.ft .sel{background:#4a4a78;mix-blend-mode:screen;will-change:transform}
+.ft .band{background:${FT2.desk};will-change:opacity}
+.ft .sel{background:rgba(150,150,182,.38);will-change:transform}
+.ft .fl{inset:0;background:#fff;opacity:0;will-change:opacity}
 .ft .fz{inset:0;will-change:opacity;opacity:0}
 `;
 
@@ -126,11 +137,11 @@ export class TrackerHud {
   /** world size of the panel (m) — the DOM is scaled onto it exactly */
   worldW: number;
   worldH: number;
-  /** the GL's copy of the screen */
-  glCanvas: HTMLCanvasElement;
+  /** the GL's copy of the screen: RGBA8 pixels, HUD_TEX_W × HUD_TEX_H, top line first */
+  pixels = new Uint8Array(HUD_TEX_W * HUD_TEX_H * 4);
+  private base: Uint8Array | null = null; // panels + static text, drawn once
   /** per channel: amplitude, cycles across the scope, waveform, ghost glow — for the GL scopes */
   scopes = new Float32Array(CH * 4);
-  private ctx: CanvasRenderingContext2D;
   private rects: Rect[] = [];
   private texts: Text[] = [];
   private el = new Map<string, HTMLElement>();
@@ -150,9 +161,11 @@ export class TrackerHud {
   private vh = 0;
   private fog: HTMLDivElement[] = [];
   private band!: HTMLDivElement;
+  private flash!: HTMLDivElement;
   private ghostEl!: HTMLSpanElement;
   private head!: HTMLDivElement;
   private gwrap!: HTMLDivElement;
+  private bk!: HTMLDivElement;
   private thumb!: HTMLDivElement;
   private selA!: HTMLDivElement;
   private play: HudPlay = { pos: 0, row: 0, rowT: 0, t: 0 };
@@ -181,10 +194,6 @@ export class TrackerHud {
     this.panel.className = 'ft';
     this.view.appendChild(this.cam);
     this.cam.appendChild(this.panel);
-    this.glCanvas = document.createElement('canvas');
-    this.glCanvas.width = HUD_TEX_W;
-    this.glCanvas.height = HUD_TEX_H;
-    this.ctx = this.glCanvas.getContext('2d')!;
     this.build();
     const stage = document.getElementById('stage');
     if (stage) stage.insertBefore(this.view, document.getElementById('voice'));
@@ -290,16 +299,20 @@ export class TrackerHud {
     box(616, PE.y, 22, PE.h, 'i', FT2.black);
     this.rects.push({ x: PE.x, y: PE.y, w: PE.w, h: PE.h, c: FT2.black });
     h += `<div class="clip" style="left:${PE.x}em;top:178em;width:${PE.w}em;height:10em"><div class="mv" data-id="head"></div></div>`;
+    // behind the text: black columns with blue separators (they scroll with the channel window) and
+    // the play-row band — no blend modes anywhere (each would make the 3D panel a render surface)
+    h += `<div class="clip" style="left:${PE.x}em;top:${PE.y}em;width:${PE.w}em;height:${PE.h}em"><div class="mv bk" data-id="bk" style="width:${CH * CHW}em;height:${PE.h}em"></div></div>`;
+    h += `<div class="band" data-id="band" style="left:2em;top:${PE.y + 9 * ROWH}em;width:636em;height:${ROWH}em"></div>`;
     h += `<div class="clip" style="left:${PE.x}em;top:${PE.y}em;width:${PE.w}em;height:${PE.h}em" data-id="pv"></div>`;
     h += `<div class="clip rn" style="left:2em;top:${PE.y}em;width:22em;height:${PE.h}em" data-id="rnL"></div>`;
     h += `<div class="clip rn" style="left:616em;top:${PE.y}em;width:22em;height:${PE.h}em" data-id="rnR"></div>`;
-    h += `<div class="band" data-id="band" style="left:2em;top:${PE.y + 9 * ROWH}em;width:636em;height:${ROWH}em"></div>`;
     h += `<div class="clip" style="left:${PE.x}em;top:${PE.y + 9 * ROWH}em;width:${PE.w}em;height:${ROWH}em"><div class="mv" data-id="gwrap"><span class="g" data-id="ghost" style="position:absolute;left:${GHOST * CHW}em;top:0;line-height:${ROWH}em;background:${FT2.desk};display:none"></span></div></div>`;
     button(4, 388, 20, 10, '◄', 6);
     button(616, 388, 20, 10, '►', 6);
     box(PE.x, 388, PE.w, 10, 'i', FT2.black);
     h += `<div style="left:${PE.x + 1}em;top:389em;width:${(PE.w * VIS) / CH - 2}em;height:8em;background:${FT2.val};will-change:transform" data-id="thumb"></div>`;
     // the hall's air in front of the screen: two fixed gradients whose opacities follow the camera
+ h += `<div class="fl" data-id="flash"></div>`;
     h += `<div class="fz" data-id="fz0" style="background:linear-gradient(to left,transparent,${HAZE})"></div>`;
     h += `<div class="fz" data-id="fz1" style="background:linear-gradient(to right,transparent,${HAZE})"></div>`;
     this.panel.innerHTML = h;
@@ -308,8 +321,10 @@ export class TrackerHud {
     for (const [id, e] of this.el) this.txt.set(id, e.textContent ?? '');
     this.head = this.el.get('head') as HTMLDivElement;
     this.gwrap = this.el.get('gwrap') as HTMLDivElement;
+    this.bk = this.el.get('bk') as HTMLDivElement;
     this.ghostEl = this.el.get('ghost') as HTMLSpanElement;
     this.band = this.el.get('band') as HTMLDivElement;
+    this.flash = this.el.get('flash') as HTMLDivElement;
     this.thumb = this.el.get('thumb') as HTMLDivElement;
     this.selA = this.panel.querySelector('.sel') as HTMLDivElement;
     this.fog = [this.el.get('fz0') as HTMLDivElement, this.el.get('fz1') as HTMLDivElement];
@@ -446,12 +461,19 @@ export class TrackerHud {
       const text = this.patternText(p);
       for (let c = 0; c < 16; c++) if (isNote(text[(g & 63) * CH + c])) counts[c] += W[c];
     }
-    let best = 0, bestN = -1;
-    for (let s = 0; s <= 16 - VIS; s++) {
+    const score = (s: number) => {
       let n = 0;
       for (let c = s; c < s + VIS; c++) n += counts[c];
+      return n;
+    };
+    let best = 0, bestN = -1;
+    for (let s = 0; s <= 16 - VIS; s++) {
+      const n = score(s);
       if (n > bestN + 1) (bestN = n), (best = s); // the leftmost window unless another is clearly busier
     }
+    // stay put unless the new window is clearly busier (every swing makes Chrome raster new tiles)
+    const cur = Math.round(this.winTarget);
+    if (cur <= 16 - VIS && score(cur) * 1.35 >= bestN) return cur;
     return best;
   }
 
@@ -484,7 +506,7 @@ export class TrackerHud {
     const tfn = `translateY(${(y / 8).toFixed(4)}em)`;
     for (const k of [0, 1]) if (this.nums[k][this.front].style.transform !== tfn) this.nums[k][this.front].style.transform = tfn;
     const tx = `translateX(${x}em)`;
-    if (this.head.style.transform !== tx) (this.head.style.transform = tx), (this.gwrap.style.transform = tx);
+    if (this.head.style.transform !== tx) (this.head.style.transform = tx), (this.gwrap.style.transform = tx), (this.bk.style.transform = tx);
     const th = `translateX(${((this.win / CH) * PE.w).toFixed(2)}em)`;
     if (this.thumb.style.transform !== th) this.thumb.style.transform = th;
     if (play.row !== this.lastRow) {
@@ -572,45 +594,65 @@ export class TrackerHud {
     }
   }
 
+  // --- the GL's copy: plain pixels (no canvas, no fonts — nothing that can stall a frame). Text is
+  // drawn as ink blocks: the copy is only seen blurred (floor reflection, bloom, the room's light).
+  private fill(r: number, g: number, b: number, x0: number, y0: number, x1: number, y1: number, a = 1) {
+    const k = HUD_TEX_W / FT_W, P = this.pixels;
+    const X0 = Math.max(0, Math.round(x0 * k)), X1 = Math.min(HUD_TEX_W, Math.round(x1 * k));
+    const Y0 = Math.max(0, Math.round(y0 * k)), Y1 = Math.min(HUD_TEX_H, Math.round(y1 * k));
+    for (let y = Y0; y < Y1; y++)
+      for (let x = X0, i = (y * HUD_TEX_W + X0) * 4; x < X1; x++, i += 4) {
+        P[i] += (r - P[i]) * a;
+        P[i + 1] += (g - P[i + 1]) * a;
+        P[i + 2] += (b - P[i + 2]) * a;
+        P[i + 3] = 255;
+      }
+  }
+  private ink(s: string, x: number, y: number, size: number, c: string, adv = 0.6) {
+    const [r, g, b] = rgb(c);
+    const w = size * adv;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === ' ') continue;
+      const dot = ch === DOT;
+      this.fill(r, g, b, x + i * w + w * 0.15, y + size * (dot ? 0.4 : 0.15), x + (i + 1) * w - w * 0.1, y + size * (dot ? 0.55 : 0.85), dot ? 0.25 : 0.55);
+    }
+  }
+
   /** redraw the GL's copy of the screen (at most every `every` s); true if it changed */
   bake(t: number, every = 0.25): boolean {
     if (!this.dirty || (this.lastBake >= 0 && Math.abs(t - this.lastBake) < every)) return false;
     this.dirty = false;
     this.lastBake = t;
-    const x = this.ctx, k = HUD_TEX_W / FT_W;
-    x.setTransform(k, 0, 0, k, 0, 0);
-    x.fillStyle = FT2.desk;
-    x.fillRect(0, 0, FT_W, FT_H);
-    for (const r of this.rects) {
-      x.fillStyle = r.c;
-      x.fillRect(r.x, r.y, r.w, r.h);
+    if (!this.base) {
+      this.pixels.fill(255);
+      const [r, g, b] = rgb(FT2.desk);
+      this.fill(r, g, b, 0, 0, FT_W, FT_H);
+      for (const q of this.rects) {
+        const [r2, g2, b2] = rgb(q.c);
+        this.fill(r2, g2, b2, q.x, q.y, q.x + q.w, q.y + q.h);
+      }
+      for (const x of this.texts) if (!x.id) this.ink(x.s, x.x, x.y, x.size, x.c);
+      this.base = this.pixels.slice();
     }
-    x.textBaseline = 'top';
-    for (const s of this.texts) {
-      if (!s.s.trim()) continue;
-      x.fillStyle = s.c;
-      x.font = `700 ${s.size}px monospace`;
-      x.fillText(s.s, s.x, s.y);
-    }
+    this.pixels.set(this.base);
+    for (const x of this.texts) if (x.id) this.ink(x.s, x.x, x.y, x.size, x.c);
     // the visible window of the pattern
     const tr = this.track, p = this.play;
-    x.font = `700 ${this.blockFont}px monospace`;
     const c0 = Math.round(this.win);
+    const [dr, dg, db] = rgb(FT2.desk);
     for (let i = 0; i < PROWS; i++) {
       const g = p.pos * 64 + p.row - 9 + i;
       const pat = g >= 0 && tr ? tr.order[g >> 6] : undefined;
       const y = PE.y + i * ROWH;
-      if (i === 9) {
-        x.fillStyle = FT2.desk;
-        x.fillRect(2, y, 636, ROWH);
-      }
+      if (i === 9) this.fill(dr, dg, db, 2, y, 638, y + ROWH);
       if (pat === undefined) continue;
       const text = this.patternText(pat);
-      x.fillStyle = (g >> 6) === p.pos ? FT2.val : FT2.dim;
+      const col = (g >> 6) === p.pos ? FT2.val : FT2.dim;
       for (let c = 0; c < VIS; c++) {
         const ch = c0 + c;
         if (ch >= CH || ch === GHOST) continue;
-        x.fillText(text[(g & 63) * CH + ch], PE.x + c * CHW + 4, y + 1.5);
+        this.ink(text[(g & 63) * CH + ch], PE.x + c * CHW + this.blockFont * 0.6, y + 1.5, this.blockFont, col);
       }
     }
     return true;
@@ -621,8 +663,8 @@ export class TrackerHud {
    * centre/right/up: the panel's world placement (unit right/up axes in the wall plane).
    */
   place(view: Float32Array | number[], fovY: number, centre: number[], right: number[], up: number[]) {
-    if (!this.vw) (this.vw = this.view.clientWidth), (this.vh = this.view.clientHeight);
-    const W = this.vw, H = this.vh;
+    // the view is the stage (100vw × 100vh): the window size needs no layout read in the frame loop
+    const W = this.vw || innerWidth, H = this.vh || innerHeight;
     if (!W || !H) return;
     const K = 100; // CSS px per metre
     const fovPx = (0.5 * H) / Math.tan(fovY / 2);
@@ -653,15 +695,18 @@ export class TrackerHud {
     if (this.panel.style.transform !== tr) this.panel.style.transform = tr;
   }
 
-  /** CSS brightness of the panel (follows the GL exposure); 1 = none */
+  /**
+   * Brightness of the panel above 1 (the eye adapting, the crash flashes): a white veil whose opacity
+   * the compositor changes for free — a CSS filter would re-render the whole 3D panel every frame.
+   */
   setBrightness(b: number) {
-    const v = b > 1.005 || b < 0.995 ? `brightness(${b.toFixed(3)})` : '';
-    if (this.panel.style.filter !== v) this.panel.style.filter = v;
+    const v = (Math.round(Math.min(0.6, Math.max(0, (b - 1) * 0.45)) * 100) / 100).toString();
+    if (this.flash.style.opacity !== v) this.flash.style.opacity = v;
   }
 
   /** the play-row band breathes with the ride (opacity only: compositor work) */
   setPulse(p: number) {
-    const v = (0.75 + 0.25 * Math.min(1, p)).toFixed(2);
+    const v = (0.8 + 0.2 * Math.min(1, p)).toFixed(2);
     if (this.band.style.opacity !== v) this.band.style.opacity = v;
   }
 

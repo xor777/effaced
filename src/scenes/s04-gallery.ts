@@ -189,22 +189,21 @@ export class Gallery {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     // until the HUD has drawn itself: FT2 blue panels over a black pattern editor
-    const c = document.createElement('canvas');
-    c.width = HUD_TEX_W;
-    c.height = HUD_TEX_H;
-    const x = c.getContext('2d')!;
-    x.fillStyle = FT2.desk;
-    x.fillRect(0, 0, HUD_TEX_W, HUD_TEX_H);
-    x.fillStyle = '#000';
-    x.fillRect(HUD_TEX_W * 0.04, HUD_TEX_H * 0.47, HUD_TEX_W * 0.92, HUD_TEX_H * 0.5);
+    const c = new Uint8Array(HUD_TEX_W * HUD_TEX_H * 4);
+    for (let y = 0; y < HUD_TEX_H; y++)
+      for (let x = 0; x < HUD_TEX_W; x++) {
+        const pat = y > HUD_TEX_H * 0.47 && y < HUD_TEX_H * 0.97 && x > HUD_TEX_W * 0.04 && x < HUD_TEX_W * 0.96;
+        c.set(pat ? [0, 0, 0, 255] : [40, 85, 134, 255], (y * HUD_TEX_W + x) * 4);
+      }
     this.uploadHud(c);
     this.lmap = createTarget(this.g, LM_W, LM_H, { formats: [gl.RGBA16F] });
   }
-  /** the GL's copy of the tracker screen (a small canvas the HUD draws) */
-  uploadHud(src: HTMLCanvasElement) {
+  /** the GL's copy of the tracker screen (RGBA8 pixels from the HUD; a plain CPU upload, no canvas) */
+  uploadHud(px: Uint8Array) {
     const gl = this.g.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.hudTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, HUD_TEX_W, HUD_TEX_H, gl.RGBA, gl.UNSIGNED_BYTE, px);
     gl.generateMipmap(gl.TEXTURE_2D);
   }
   private common(p: Program, o: DrawOpts) {
@@ -302,16 +301,19 @@ const FALLBACK: Record<number, number[]> = {
 };
 type Drums = Record<number, number[]>;
 function drumsFrom(audio: FrameCtx['audio'], track: TrackInfo | null): Drums {
+  // the pattern data is the cheapest exact source (a few hundred cells); the render's note list only
+  // when there is no track
   const out: Drums = {};
+  const tr = track ?? audio?.track ?? null;
   for (const ch of [1, 2, 3, 4, 16]) {
     let t: number[] = [];
-    if (audio) t = audio.notes.filter((n) => n.ch === ch && n.grow >= G0 && n.grow < G1).map((n) => n.t);
-    else if (track)
+    if (tr)
       for (let g = G0; g < G1; g++) {
-        const pat = track.patterns[track.order[g >> 6]];
-        const c = pat?.cells[(g & 63) * track.channels + ch - 1];
+        const pat = tr.patterns[tr.order[g >> 6]];
+        const c = pat?.cells[(g & 63) * tr.channels + ch - 1];
         if (c && c.note > 0 && c.note < 97) t.push(g * ROW);
       }
+    else if (audio) t = audio.notes.filter((n) => n.ch === ch && n.grow >= G0 && n.grow < G1).map((n) => n.t);
     out[ch] = t.length ? t : FALLBACK[ch].map((r) => r * ROW);
   }
   return out;
@@ -348,7 +350,7 @@ export const EYE = [
   [9.6, 1.2, 2.55, -8.8],
   [11.52, 1.05, 2.55, -8.78],
   [13.44, 0.98, 2.56, -8.8],
-  [15.36, -0.85, 3.2, -10.25],
+  [15.36, -0.4, 3.05, -10.05],
 ];
 interface Shot {
   t: number; // the whip lands here (on a bar line)
@@ -506,7 +508,7 @@ export function createGallery(g: Gfx): Scene {
         hud.setFog(fog(HUD_RECT.Z0), fog(HUD_RECT.Z1));
       }
       hud?.updateScopes(f.t, f.audio ? f.S : null);
-      if (hud?.bake(f.t)) gal.uploadHud(hud.glCanvas);
+      if (hud?.bake(f.t)) gal.uploadHud(hud.pixels);
 
       const o: DrawOpts = {
         t: f.t,
