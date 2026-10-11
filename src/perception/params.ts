@@ -86,7 +86,7 @@ export interface FaceParams {
   eyesRows: number; // … over this many rows
   embers: number; // ember brightness (0 = no embers: the face just develops / dissolves)
   life: number; // the point's reactions: flare on the heartbeat, gathering the embers (0 = none)
-  ending: 'erase' | 'afterimage'; // the show: erased into the point · lab: the old afterimage (cut to white)
+  ending: 'erase' | 'afterimage'; // erased into the point (as the show's word) · the old afterimage (cut to white)
   eraseRow: number; // first erasure step (84 = 1D:20, when the echo leaves)
   eraseSteps: number; // one step per channel leaving (8: echo, lead, sub, bass, harp, strings, warm pad, choir)
   eraseStepRows: number; // the drop-out period (12)
@@ -223,7 +223,7 @@ export function defaults(): Params {
       eyesRows: 6,
       embers: 1,
       life: 1,
-      ending: 'erase',
+      ending: 'afterimage',
       eraseRow: 84,
       eraseSteps: 8,
       eraseStepRows: 12,
