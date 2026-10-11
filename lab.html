@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EFFACED Audio Lab</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3' fill='%23decade'/%3E%3C/svg%3E" />
+    <style>
+      :root {
+        --bg: #0d0c10;
+        --panel: #16141b;
+        --line: #2a2631;
+        --text: #d9d3e3;
+        --dim: #8a8394;
+        --accent: #decade;
+        --hot: #facade;
+        --cur: #3a3046;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      body { display: grid; grid-template-rows: auto auto 1fr; overflow: hidden; }
+      header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+      header h1 { font-size: 13px; margin: 0 8px 0 0; color: var(--accent); letter-spacing: 0.08em; }
+      select, button, input { font: inherit; color: var(--text); background: #221f29; border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; }
+      button:hover { border-color: var(--accent); }
+      button.on { background: var(--cur); border-color: var(--accent); }
+      input[type='number'] { width: 46px; }
+      .stat { color: var(--dim); }
+      .stat b { color: var(--text); font-weight: normal; }
+      #timeline { height: 34px; width: 100%; display: block; cursor: pointer; border-bottom: 1px solid var(--line); }
+      main { display: grid; grid-template-columns: minmax(0, 1fr) 360px 300px; min-height: 0; }
+      #patwrap { overflow: auto; border-right: 1px solid var(--line); padding: 6px 0; }
+      #pattern { margin: 0; padding: 0 10px; font-size: 11px; line-height: 15px; white-space: pre; }
+      #pattern .cur { background: var(--cur); color: #fff; }
+      #pattern .hdr { color: var(--dim); }
+      #pattern .n { color: var(--text); }
+      #pattern .e { color: #4a4452; }
+      #pattern .mk { color: var(--hot); }
+      #side { display: flex; flex-direction: column; border-right: 1px solid var(--line); min-height: 0; }
+      #scope { width: 100%; aspect-ratio: 1; background: #050407; display: block; }
+      #meters { width: 100%; height: 140px; display: block; border-top: 1px solid var(--line); }
+      #names { flex: 1; overflow: auto; padding: 6px 10px; border-top: 1px solid var(--line); color: var(--dim); white-space: pre; font-size: 11px; }
+      #names b { color: var(--text); font-weight: normal; }
+      #pane { overflow: auto; padding: 6px; }
+      #drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(13, 12, 16, 0.85); font-size: 20px; color: var(--accent); z-index: 9; }
+      body.dragging #drop { display: flex; }
+      #log { color: var(--dim); max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      @media (max-width: 1100px) { main { grid-template-columns: 1fr; overflow: auto; } #patwrap { height: 55vh; } #side { border-right: 0; } #scope { max-width: 420px; margin: 0 auto; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>EFFACED · AUDIO LAB</h1>
+      <select id="source" title="module (music/*.xm, out/*.xm; drop an .xm anywhere)"></select>
+      <button id="open" title="open an .xm from disk">open…</button>
+      <input id="file" type="file" accept=".xm" hidden />
+      <label class="stat"><input id="watch" type="checkbox" checked /> watch</label>
+      <select id="device" title="setup-screen device">
+        <option value="webaudio">Web Audio</option>
+        <option value="gus">Gravis Ultrasound</option>
+        <option value="sb16">Sound Blaster 16</option>
+      </select>
+      <button id="render">render</button>
+      <button id="play" title="space">▶ play</button>
+      <label class="stat"><input id="loop" type="checkbox" /> loop</label>
+      <input id="loopA" type="number" min="0" max="31" value="0" title="loop from position" />
+      <input id="loopB" type="number" min="1" max="32" value="1" title="loop to position (exclusive)" />
+      <button id="bench" title="render out/stress.xm (32 dense positions) and report the time">benchmark</button>
+      <span class="stat">pos <b id="pos">--:--</b> · <b id="scene">—</b> · <b id="time">0:00.00</b></span>
+      <span class="stat" id="log"></span>
+    </header>
+    <canvas id="timeline"></canvas>
+    <main>
+      <div id="patwrap"><pre id="pattern"></pre></div>
+      <div id="side">
+        <canvas id="scope" width="720" height="720"></canvas>
+        <canvas id="meters" width="720" height="280"></canvas>
+        <div id="names"></div>
+      </div>
+      <div id="pane"></div>
+    </main>
+    <div id="drop">drop an .xm to load it</div>
+    <script type="module" src="/src/dev/audio-lab.ts"></script>
+  </body>
+</html>

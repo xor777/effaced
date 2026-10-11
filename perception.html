@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EFFACED · perception lab</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ui: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      body { font: 12px/1.45 var(--ui); color: #ccc; }
+      #stage { position: fixed; left: 0; top: 0; overflow: hidden; }
+      #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      .voice {
+        position: absolute; left: 0; right: 0; text-align: center; pointer-events: none;
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace; white-space: pre; opacity: 0;
+        letter-spacing: 0.02em; -webkit-font-smoothing: antialiased;
+      }
+      #safe { position: absolute; inset: 5% 5%; outline: 1px dashed rgba(255, 0, 128, 0.6); pointer-events: none; display: none; }
+      #pane { position: fixed; top: 8px; right: 8px; width: 400px; max-height: calc(100vh - 16px); overflow-y: auto; z-index: 5; }
+      #pane::-webkit-scrollbar { width: 0; }
+      #debug {
+        position: fixed; left: 8px; bottom: 8px; z-index: 4; margin: 0; padding: 6px 8px; max-width: 60vw;
+        background: rgba(0, 0, 0, 0.62); color: #9f9; font: 11px/1.35 var(--ui); white-space: pre; pointer-events: none;
+      }
+      #note {
+        position: fixed; left: 8px; top: 8px; z-index: 4; width: 360px; padding: 10px 12px; background: rgba(20, 20, 20, 0.9);
+        border: 1px solid #444; color: #ddd;
+      }
+      #note h1 { font-size: 12px; margin: 0 0 6px; color: #fff; letter-spacing: 0.04em; }
+      #note p { margin: 0 0 6px; }
+      #note ul { margin: 0 0 6px; padding-left: 16px; }
+      #note button { font: inherit; background: #333; color: #eee; border: 1px solid #555; padding: 2px 8px; cursor: pointer; }
+      #note.hidden { display: none; }
+      .warn { color: #fc6; }
+      body.trial #pane, body.trial #debug, body.trial #note, body.trial #safe { display: none !important; }
+      body.trial.running { cursor: none; }
+      #layer { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; }
+      #layer.show { display: flex; }
+      #layer.on-gray { background: transparent; }
+      #layer.on-black { background: transparent; }
+      #layer.questions { background: rgb(118 118 118); overflow-y: auto; align-items: flex-start; padding: 4vh 0; box-sizing: border-box; animation: fadein 0.8s ease both; }
+      @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+      .card { background: #222; color: #e6e6e6; padding: 18px 22px; max-width: 620px; width: calc(100% - 32px); box-sizing: border-box; font: 14px/1.5 system-ui, sans-serif; }
+      .ready-card { background: rgba(30, 30, 30, 0.88); position: absolute; bottom: 12%; text-align: center; max-width: 520px; }
+      .card .dim { color: #999; font-size: 12px; }
+      .card h2 { font-size: 16px; margin: 0 0 12px; font-weight: 600; }
+      .q { display: block; border: 0; margin: 0 0 12px; padding: 0; }
+      .q > span, .q legend { display: block; margin-bottom: 4px; color: #fff; }
+      .q input[type='text'], .q input[type='number'] { width: 100%; box-sizing: border-box; font: inherit; padding: 4px 6px; background: #111; color: #eee; border: 1px solid #555; }
+      .opt { display: inline-block; margin: 0 14px 4px 0; color: #ccc; white-space: nowrap; }
+      .row { display: flex; gap: 10px; margin-top: 8px; }
+      .card button { font: inherit; padding: 6px 16px; background: #444; color: #fff; border: 1px solid #666; cursor: pointer; }
+      .card textarea { width: 100%; height: 120px; }
+      #err { position: fixed; inset: 0; display: none; place-items: center; background: #0000aa; color: #aaa; font: 16px var(--ui); white-space: pre; z-index: 20; }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="gl"></canvas>
+      <div id="hint" class="voice"></div>
+      <div id="coda" class="voice"></div>
+      <div id="safe"></div>
+    </div>
+    <pre id="debug"></pre>
+    <div id="pane"></div>
+    <div id="note">
+      <h1>EFFACED · PERCEPTION LAB</h1>
+      <p class="warn">Photosensitivity: this page shows long still images, bright white fields, a hard cut from a coloured
+        image to white, and small discs blinking 8.3 times per second (low contrast, small area — below the WCAG 2.3.1
+        flash thresholds). Stop if you feel any discomfort. Not for people with photosensitive epilepsy.</p>
+      <p>Calibration display checklist (PLAN §10.3), target MacBook only:</p>
+      <ul>
+        <li>True Tone, Night Shift and auto-brightness OFF; brightness fixed</li>
+        <li>on power, Low Power Mode off; Do Not Disturb on</li>
+        <li>other apps closed; Chrome profile without extensions</li>
+        <li>dim room, normal viewing distance (~55 cm)</li>
+        <li>participant has not seen the demo or the illusion before</li>
+      </ul>
+      <p>H hides the panel · D toggles the debug readout · Space play/pause · R restart</p>
+      <button id="note-ok">OK</button>
+    </div>
+    <div id="layer"></div>
+    <div id="err"></div>
+    <script type="module" src="/src/perception/main.ts"></script>
+  </body>
+</html>
