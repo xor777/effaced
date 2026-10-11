@@ -5,35 +5,55 @@
 // with `plus-lighter`), where they swirl on a Thomas attractor wrapped around the canvas; in the last
 // bar they settle on the creature's sigil, which S13 grows into a flame.
 //
+// The music drives every move (onsets from s12-s13-cues.ts, the same with and without sound):
+//   18:00  orchestra hit F, the tonic lifts: the full-screen canvas snaps into a window (a spring) and
+//          leaves its own frame behind as an afterimage on the outside layer; from now on it stands on
+//          a mirror (-webkit-box-reflect: its reflection turns with it) and its border glows;
+//   bars   each crash is a gesture of the window (a whip, a swing, a full turn on 18:48, a punch towards
+//          us on the orchestra hit of 19:00), and the window's fast moves leave afterimage frames;
+//          inside, the cloud morphs on the G/F bars (18:16, 18:48) from the Aizawa — the circle — into
+//          a Halvorsen — the triangle — in a vortex, and back on the F bars; the inner camera whips on
+//          the hits and rises to look down the axis while the triangle shows; the kick makes it breathe;
+//   19:16  the inhale (snare and timpani roll): the window recedes and trembles, the cloud contracts and
+//          heats up;
+//   19:32  the burst: the canvas flashes, the particles explode out of it white-hot, shock rings and a
+//          flash on the outside, the stage shakes; they cool into colour on the Thomas attractor;
+//   19:44  they land on the sigil (S13's first frame).
+//
 // Both contexts start from the same settled cloud. The canvas integrates it all along (RK4, a fixed
 // number of steps per second of song time); the outside only wakes up two steps before the hit: a
 // settled attractor is a stationary distribution, so its cloud then is the same cloud — a particle
 // leaves one canvas and appears in the other in the same picture, without the outside paying for the
 // 11 s before. The outside is projected with the stage's own CSS perspective and the canvas's own
-// matrix3d, so the two layers line up exactly (checked against getBoundingClientRect).
+// matrix3d, so the two layers line up exactly (checked against getBoundingClientRect). Everything the
+// launch depends on (inner camera, breathing, the window) is a pure function of song time.
 
 import { type Gfx, type Program, type Target, createGfx, program, ensureTarget, bindTarget, fullscreen, PingPong } from '../gfx/gl.ts';
 import type { Scene, FrameCtx } from './types.ts';
 import { markerTimes, hit, smoothstep } from '../timeline/events.ts';
 import { ROW, ROWS } from '../timeline/script.ts';
-import { CH } from '../music/roster.ts';
 import { sigilTables } from '../audio/synth/scope.ts';
-import { SIGIL_R, BANDS } from './s13-erasure.ts'; // same sigil size, same banded splatting
+import { SIGIL_R, SIGIL_COL, BANDS, p3 } from './s13-erasure.ts'; // same sigil size and light, same banded splatting
+import { cues, pulse, steps, swell, type Cues, type Ev } from './s12-s13-cues.ts';
 
 const NW = 1024, NH = 1024; // 1M particles
 const RATE = 60; // simulation steps per second of song time (both contexts) — the scene runs at 60 Hz
 const H_AIZ = 0.013; // Aizawa time per step
+const H_HAL = 0.0045; // Halvorsen time per step
 const BURN = 160; // settling steps of the Aizawa cloud (once, then kept as a seed)
+const BURN_HAL = 400;
 const THOMAS_B = 0.2, THOMAS_H = 3.2 / RATE; // Thomas: dissipation b, attractor time per step
 const THOMAS_AT = [0, 0.02, -0.3, 0.2]; // its centre in the stage (H units) and its scale (H per unit)
 const P18 = 0x18 * ROWS, P1A = 0x1a * ROWS;
 const T0 = P18 * ROW;
+const rowT = (r: number) => T0 + r * ROW;
 
-const hexLin = (h: string) => {
-  const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
-  return [0.8224621 * c[0] + 0.177538 * c[1], 0.0331941 * c[0] + 0.9668058 * c[1], 0.0170827 * c[0] + 0.0723974 * c[1] + 0.9105199 * c[2]];
-};
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const easeIn = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * x);
+const easeOut = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - (1 - x) ** 3);
+/** 0 → 1 with one overshoot (x in units of the move's length) */
+const spring = (x: number) => (x <= 0 ? 0 : x >= 3 ? 1 : 1 - Math.exp(-4.5 * x) * Math.cos(5.5 * x));
 
 // ---- 4×4 column-major
 type M4 = number[];
@@ -46,41 +66,24 @@ const tr = (x: number, y: number, z: number): M4 => [1, 0, 0, 0, 0, 1, 0, 0, 0, 
 const sc = (x: number, y: number, z: number): M4 => [x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1];
 const rx = (a: number): M4 => [1, 0, 0, 0, 0, Math.cos(a), Math.sin(a), 0, 0, -Math.sin(a), Math.cos(a), 0, 0, 0, 0, 1];
 const ry = (a: number): M4 => [Math.cos(a), 0, -Math.sin(a), 0, 0, 1, 0, 0, Math.sin(a), 0, Math.cos(a), 0, 0, 0, 0, 1];
+const rz = (a: number): M4 => [Math.cos(a), Math.sin(a), 0, 0, -Math.sin(a), Math.cos(a), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+const app = (m: M4, v: number[]) => [0, 1, 2].map((r) => m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r]);
 
-// ---- the canvas's path through the stage: [row from 18:00, scale, rotateX°, rotateY°, translateZ (H)]
-const KEYS: number[][] = [
-  [-8, 1, 0, 0, 0],
-  [0, 1, 0, 0, 0],
-  [4, 0.97, 1, -3, 0],
-  [28, 0.6, 7, -24, -0.06],
-  [40, 0.6, 4, -12, -0.04],
-  [56, 0.6, 2, 90, 0],
-  [72, 0.6, 2, 270, 0],
-  [86, 0.62, 3, 352, 0.05],
-  [94, 0.66, 1, 360, 0.12],
-  [96, 0.66, 0, 360, 0.12],
-  [110, 0.6, 6, 366, -0.06],
-  [114, 0.62, 4, 365, -0.05],
-  [126, 1, 0, 360, 0],
-  [136, 1, 0, 360, 0],
+// ---- the window's poses: [scale, rotateX°, rotateY°, rotateZ°, x, y, z (H units, y up)], entered at a row
+// with a curve over a number of rows. CSS: translate · rotateY · rotateX · rotateZ · scale.
+type Pose = number[];
+const IDENT: Pose = [1, 0, 0, 0, 0, 0, 0];
+const POSES: { row: number; dur: number; k: (x: number) => number; p: Pose }[] = [
+  { row: 0, dur: 5, k: spring, p: [0.62, 6, -14, 2, 0, 0, 0] }, // 18:00 the canvas becomes a window
+  { row: 16, dur: 4, k: spring, p: [0.6, 4, -40, 6, 0.06, 0, -0.04] }, // whip
+  { row: 32, dur: 4, k: spring, p: [0.6, -9, 36, -6, -0.12, 0.02, 0] }, // swing back, aside
+  { row: 48, dur: 13, k: ease, p: [0.62, 3, 350, 0, 0, 0, 0.04] }, // a full turn
+  { row: 64, dur: 4, k: spring, p: [0.65, 4, 366, 2, 0, 0, 0.06] }, // (the punch is an accent)
+  { row: 80, dur: 16, k: easeIn, p: [0.5, 2, 360, -8, 0, 0.01, -0.5] }, // the inhale: away from us
+  { row: 96, dur: 2.5, k: spring, p: [0.66, 0, 360, 0, 0, 0, 0.1] }, // the burst: slammed to the front
+  { row: 99, dur: 13, k: easeOut, p: [0.58, 10, 432, 5, 0.08, 0, -0.25] }, // emptied, it turns away
+  { row: 112, dur: 14, k: ease, p: [1, 0, 360, 0, 0, 0, 0] }, // back to the screen, dark (S13 at identity)
 ];
-/** Catmull–Rom through KEYS at row r */
-function path(r: number): number[] {
-  let i = 1;
-  while (i < KEYS.length - 3 && KEYS[i + 1][0] <= r) i++;
-  const [k0, k1, k2, k3] = [KEYS[i - 1], KEYS[i], KEYS[i + 1], KEYS[i + 2]];
-  const u = clamp01((r - k1[0]) / (k2[0] - k1[0]));
-  const out: number[] = [];
-  for (let j = 1; j < 5; j++) {
-    const p0 = k0[j], p1 = k1[j], p2 = k2[j], p3 = k3[j];
-    // non-uniform key spacing: scale the tangents by the segment length
-    const d1 = k2[0] - k1[0];
-    const m1 = ((p2 - p0) / (k2[0] - k0[0])) * d1, m2 = ((p3 - p1) / (k3[0] - k1[0])) * d1;
-    const u2 = u * u, u3 = u2 * u;
-    out.push((2 * u3 - 3 * u2 + 1) * p1 + (u3 - 2 * u2 + u) * m1 + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * m2);
-  }
-  return out;
-}
 
 interface Ctx {
   g: Gfx;
@@ -90,12 +93,16 @@ interface Ctx {
   out?: Program;
   thomas?: Program;
   inner: PingPong;
+  hal?: PingPong;
   outer?: PingPong;
   home?: PingPong;
   /** settled states, computed once: a reset is a copy, not a burn-in (no hitch at 18:00) */
   seed: Target | null;
+  seedHal: Target | null;
   seedHome: Target | null;
   hist: Target | null;
+  /** nothing splatted since the last clear */
+  empty: boolean;
   acc: number;
   W: number;
 }
@@ -118,11 +125,14 @@ export function createCanvas(g: Gfx): Scene {
     out: outside ? program(gg, 'scenes/s12-out') : undefined,
     thomas: outside ? program(gg, 'scenes/s12-thomas') : undefined,
     inner: new PingPong({ formats: [gg.gl.RGBA32F], filter: gg.gl.NEAREST }),
+    hal: outside ? undefined : new PingPong({ formats: [gg.gl.RGBA32F], filter: gg.gl.NEAREST }),
     outer: outside ? new PingPong({ formats: [gg.gl.RGBA32F, gg.gl.RGBA32F], filter: gg.gl.NEAREST }) : undefined,
     home: outside ? new PingPong({ formats: [gg.gl.RGBA32F], filter: gg.gl.NEAREST }) : undefined,
     seed: null,
+    seedHal: null,
     seedHome: null,
     hist: null,
+    empty: false,
     acc: 0,
     W: 1,
   });
@@ -130,33 +140,98 @@ export function createCanvas(g: Gfx): Scene {
   const B = make(g2, true); // the outside
   let sigTex: WebGLTexture | null = null;
   let sigN = 0;
-  let steps = -1; // simulation steps done (both contexts), -1 = needs a reset
+  let steps_ = -1; // simulation steps done (both contexts), -1 = needs a reset
   let warmed = false;
   let active = false;
   let wasOutside = false;
   let dH = 2000 / 945; // CSS perspective in stage heights
   let Hcss = 945;
   const pal = {
-    in: ['#4A1460', '#D2508C', '#FACADE'].map(hexLin),
-    out: ['#5F7FD0', '#DECADE', '#E8508F'].map(hexLin),
-    heat: hexLin('#EFFACE'),
-    sigil: hexLin('#DECADE'),
+    // inside, by velocity: towards us cyan, away magenta, across violet; fast #FACADE, white-hot
+    in: [[0.05, 0.55, 1.0], [1.0, 0.08, 0.45], [0.42, 0.1, 0.95], p3('#FACADE'), [1.0, 0.96, 0.92]],
+    // outside, round the Thomas lobes: magenta, #FACADE gold, cyan, violet (saturated P3)
+    out: [[1.0, 0.12, 0.55], [1.0, 0.62, 0.22], [0.05, 0.72, 0.95], [0.48, 0.16, 1.0]],
+    heat: [1.6, 1.5, 1.35],
+    sigil: SIGIL_COL,
   };
+  const BG = [p3('#24152E').map((x) => x * 1.1), p3('#0B0710')];
+  // dev knobs (globalThis.__s12)
+  const dev = { ref: 100, expo: 1.0, gain: 0.65, pitch: 0.45, xk: 0.26, depthK: 1.0 };
+  if (import.meta.env.DEV) (globalThis as unknown as { __s12: typeof dev }).__s12 = dev;
+  const FRAME = p3('#FACADE');
 
   // ---- music
-  const times = (f: FrameCtx) => ({
-    hit: markerTimes(f.audio, 'D-4', P18, P1A, [P18 + 96])[0],
-    land0: (P18 + 108) * ROW,
-    land1: (P18 + 126) * ROW,
-  });
+  interface Plan {
+    c: Cues;
+    hit: number;
+    land0: number;
+    land1: number;
+    /** pose transitions (times) and the value each one starts from */
+    poseT: number[];
+    poseFrom: Pose[];
+    /** morph toggles: time, direction */
+    morph: [number, number][];
+    /** hits inside the scene (crash + orchestra), for the inner camera's whips */
+    whips: Ev[];
+    stab64: number;
+  }
+  let memo: { audio: FrameCtx['audio']; p: Plan } | null = null;
+  const plan = (audio: FrameCtx['audio']): Plan => {
+    if (memo && memo.audio === audio) return memo.p;
+    const c = cues(audio);
+    const tHit = markerTimes(audio, 'D-4', P18, P1A, [P18 + 96])[0];
+    // the crashes of the scene, by row (a missing one falls back to its written row)
+    const inS = (e: Ev) => e.t >= T0 - 1e-3 && e.t < P1A * ROW - 1e-3;
+    const crash = c.crash.filter(inS);
+    const near = (row: number) => crash.find((e) => Math.abs(e.t - rowT(row)) < 2.5 * ROW)?.t ?? rowT(row);
+    const poseT = POSES.map((k) => (k.row % 16 === 0 && k.row < 112 ? near(k.row) : rowT(k.row)));
+    poseT[6] = tHit; // the burst
+    poseT[7] = tHit + 3 * ROW;
+    const poseFrom: Pose[] = [];
+    let cur = IDENT;
+    POSES.forEach((k, i) => {
+      if (i > 0) {
+        const q = POSES[i - 1];
+        const x = q.k((poseT[i] - poseT[i - 1]) / (q.dur * ROW));
+        cur = poseFrom[i - 1].map((v, j) => v + (q.p[j] - v) * x);
+      }
+      poseFrom.push(cur);
+    });
+    const merged: Ev[] = [];
+    for (const e of [...crash, ...c.stab.filter(inS)].sort((a, b) => a.t - b.t)) {
+      const last = merged[merged.length - 1];
+      if (last && e.t - last.t < 0.03) last.v = Math.max(last.v, e.v);
+      else merged.push({ ...e });
+    }
+    const p: Plan = {
+      c,
+      hit: tHit,
+      land0: rowT(108),
+      land1: rowT(126),
+      poseT,
+      poseFrom,
+      morph: [[near(16), 1], [near(32), -1], [near(48), 1], [near(64), -1]],
+      whips: merged.filter((e) => e.t > T0 + 0.01 && e.t < tHit - 0.01),
+      stab64: near(64),
+    };
+    memo = { audio, p };
+    return p;
+  };
 
-  // ---- inner camera (the picture inside the canvas) at song time t
-  const innerCam = (t: number) => {
+  /** Aizawa ↔ Halvorsen: 0..1 */
+  const morphAt = (p: Plan, t: number) => clamp01(p.morph.reduce((m, [te, d]) => m + d * ease((t - te) / (6 * ROW)), 0));
+  /** the inhale 19:16–19:31 */
+  const inhaleAt = (p: Plan, t: number) => easeIn((t - rowT(80)) / (p.hit - rowT(80))) * (t < p.hit ? 1 : 0);
+
+  // ---- inner camera (the picture inside the canvas) at song time t — a pure function of t
+  const innerCam = (p: Plan, t: number) => {
     const l = t - T0;
-    const yaw = 0.3 * l + 0.4, pitch = 0.2 + 0.08 * Math.sin(l * 0.37);
+    const m = morphAt(p, t);
+    const yaw = 0.3 * l + 0.4 + 0.75 * steps(p.whips, t, 0.16);
+    const pitch = 0.2 + dev.pitch + 0.08 * Math.sin(l * 0.37) + 0.95 * m;
     const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
     // R = Rx(pitch) · [x, z, −y] · Rz(yaw), as a GLSL mat3 (column-major)
-    const rz = [cy, sy, 0, -sy, cy, 0, 0, 0, 1];
+    const rzm = [cy, sy, 0, -sy, cy, 0, 0, 0, 1];
     const swap = [1, 0, 0, 0, 0, -1, 0, 1, 0];
     const rxm = [1, 0, 0, 0, cp, sp, 0, -sp, cp];
     const m3 = (a: number[], b: number[]) => {
@@ -164,35 +239,61 @@ export function createCanvas(g: Gfx): Scene {
       for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) for (let k = 0; k < 3; k++) o[c * 3 + r] += a[k * 3 + r] * b[c * 3 + k];
       return o;
     };
-    const zoom = 1 + 0.12 * smoothstep(0, 4, l);
-    return { rot: m3(rxm, m3(swap, rz)), cam: [0, 0, 0.35, 1.02 * zoom], dist: 4.2 };
+    const zoom = (1 + 0.12 * smoothstep(0, 4, l)) * (1 + 0.1 * m);
+    const breath = (1 + 0.06 * pulse(p.c.kick, t, 0.09) + 0.14 * pulse(p.c.stab, t, 0.3)) * (1 - 0.3 * inhaleAt(p, t));
+    return { rot: m3(rxm, m3(swap, rzm)), cam: [0, 0, 0.35, 1.02 * zoom], dist: 4.2, breath };
   };
 
   // ---- the canvas's transform at song time t: CSS matrix (px, y down) and plane → stage (H, y up)
-  const windowAt = (t: number, f: FrameCtx | null, tHit: number) => {
-    const r = (t - T0) / ROW;
-    let [s, ax, ay, tz] = path(r);
-    const kick = hit(t, tHit, 0.03, 0.4);
-    tz -= 0.24 * kick;
+  const windowAt = (p: Plan, t: number) => {
+    let i = 0;
+    while (i + 1 < POSES.length && t >= p.poseT[i + 1]) i++;
+    const P = t < p.poseT[0] ? IDENT : p.poseFrom[i].map((v, j) => v + (POSES[i].p[j] - v) * POSES[i].k((t - p.poseT[i]) / (POSES[i].dur * ROW)));
+    let [s, ax, ay, az, x, y, z] = P;
+    const c = p.c;
+    // accents: the kick, the snare, the punch of 19:00, the tremble of the inhale, the recoil of the burst
+    const live = t < p.land0 ? 1 : 0;
+    s *= 1 + 0.012 * pulse(c.kick, t, 0.08) * live;
+    const sn = pulse(c.snare, t, 0.07) * live;
+    ax += 1.4 * sn;
+    az += 0.8 * sn * (Math.floor(t / (4 * ROW)) % 2 ? 1 : -1);
+    const punch = hit(t, p.stab64, 0.04, 0.35);
+    z += 0.3 * punch;
+    ax += 10 * punch;
+    const roll = Math.min(1.5, swell(c.snare, t, 0.1, rowT(79.5))) * (t < p.hit ? 1 : 0);
+    ax += 1.6 * roll * Math.sin(t * 83);
+    ay += 1.6 * roll * Math.sin(t * 71 + 1);
+    az += 1.0 * roll * Math.sin(t * 97 + 2);
+    const kick = hit(t, p.hit, 0.02, 0.4);
+    z -= 0.3 * kick;
     s -= 0.05 * kick;
-    ax += 7 * kick;
-    let jx = 0, jy = 0;
-    if (f) {
-      const sn = (f.S[CH.snare - 1] ?? 0) * smoothstep(80, 94, r) * (1 - smoothstep(96, 98, r));
-      jx = 0.006 * sn * Math.sin(t * 91);
-      jy = 0.006 * sn * Math.sin(t * 77 + 1);
-    }
-    const css = mul(tr(jx * Hcss, -jy * Hcss, tz * Hcss), mul(ry((ay * Math.PI) / 180), mul(rx((ax * Math.PI) / 180), sc(s, s, 1))));
+    ax += 9 * kick;
+    const d = Math.PI / 180;
+    const css = mul(tr(x * Hcss, -y * Hcss, z * Hcss), mul(ry(ay * d), mul(rx(ax * d), mul(rz(az * d), sc(s, s, 1)))));
     // plane (H units, y up) → CSS local px (y down) → CSS stage px → stage H units (y up)
     const F = sc(1 / Hcss, -1 / Hcss, 1 / Hcss), Fi = sc(Hcss, -Hcss, Hcss);
-    return { css, W: mul(F, mul(css, Fi)), identity: Math.abs(s - 1) < 1e-4 && Math.abs(ay % 360) < 1e-3 && Math.abs(ax) < 1e-3 && Math.abs(tz) < 1e-4 };
+    const identity = Math.abs(s - 1) < 1e-4 && Math.abs(ay % 360) < 1e-3 && Math.abs(ax) < 1e-3 && Math.abs(az) < 1e-3 && Math.abs(z) < 1e-4 && Math.abs(x) < 1e-4 && Math.abs(y) < 1e-4;
+    return { css, W: mul(F, mul(css, Fi)), identity };
   };
 
-  const pass = (gg: Gfx, pp: PingPong, p: Program, set: (p: Program) => void) => {
-    if (!p.use()) return;
+  /** the window's corners on the outside canvas (px), counter-clockwise; null when behind the eye */
+  const corners = (W: M4, aspect: number, ow: number, oh: number): number[] | null => {
+    const out: number[] = [];
+    for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const [X, Y, Z] = app(W, [(u * aspect) / 2, v / 2, 0]);
+      const den = dH - Z;
+      if (den < 0.1 * dH) return null;
+      const k = dH / den;
+      out.push(((X * k * 2) / aspect + 1) * 0.5 * ow, (Y * k * 2 + 1) * 0.5 * oh);
+    }
+    return out;
+  };
+
+  const pass = (gg: Gfx, pp: PingPong, pr: Program, set: (p: Program) => void) => {
+    if (!pr.use()) return;
     pp.ensure(gg, NW, NH);
     bindTarget(gg, pp.write);
-    set(p);
+    set(pr);
     fullscreen(gg);
     pp.swap();
   };
@@ -205,7 +306,9 @@ export function createCanvas(g: Gfx): Scene {
     gx.bindFramebuffer(gx.DRAW_FRAMEBUFFER, null);
   };
   const aizawa = (c: Ctx, reset = false, h = H_AIZ) =>
-    pass(c.g, c.inner, c.sim, (p) => p.tex('st', c.inner.read.tex[0], 0).set('h', h).set('reset', reset ? 1 : 0));
+    pass(c.g, c.inner, c.sim, (p) => p.tex('st', c.inner.read.tex[0], 0).set('h', h).set('reset', reset ? 1 : 0).set('kind', 0));
+  const halvorsen = (reset = false) =>
+    pass(g, A.hal!, A.sim, (p) => p.tex('st', A.hal!.read.tex[0], 0).set('h', H_HAL).set('reset', reset ? 1 : 0).set('kind', 1));
   const thomas = (reset = false, h = THOMAS_H) =>
     pass(g2, B.home!, B.thomas!, (p) => p.tex('st', B.home!.read.tex[0], 0).set('h', h).set('b', THOMAS_B).set('reset', reset ? 1 : 0));
 
@@ -222,6 +325,14 @@ export function createCanvas(g: Gfx): Scene {
       c.inner.ensure(c.g, NW, NH);
       copy(c.g, c.seed, c.inner.read);
     }
+    if (!A.seedHal) {
+      halvorsen(true);
+      for (let i = 0; i < BURN_HAL; i++) halvorsen();
+      A.seedHal = ensureTarget(g, null, NW, NH, { formats: [gl.RGBA32F], filter: gl.NEAREST });
+      copy(g, A.hal!.read, A.seedHal);
+    }
+    A.hal!.ensure(g, NW, NH);
+    copy(g, A.seedHal, A.hal!.read);
     if (!B.seedHome) {
       thomas(true, 0.15);
       for (let i = 0; i < 320; i++) thomas(false, 0.15);
@@ -232,36 +343,38 @@ export function createCanvas(g: Gfx): Scene {
     copy(g2, B.seedHome, B.home!.read);
   };
 
-  /** the Thomas attractor turns slowly about the vertical (and a little about x): depth by parallax */
-  const thomasTurn = (t: number) => {
-    const a = 0.22 * (t - T0), b = 0.35;
+  /** the Thomas attractor turns about the vertical (and a little about x): depth by parallax; whipped at 19:48 */
+  const thomasTurn = (p: Plan, t: number) => {
+    const a = 0.22 * (t - T0) + 1.2 * easeOut((t - p.hit) / (6 * ROW)) * (t > p.hit ? 1 : 0) + 0.9 * spring((t - rowT(112)) / (4 * ROW)), b = 0.35;
     const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
     // Ry(a) · Rx(b), column-major
     return [ca, 0, -sa, sa * sb, cb, ca * sb, sa * cb, -sb, ca * cb];
   };
 
-  const camUniforms = (p: Program, t: number) => {
-    const ic = innerCam(t);
-    p.set('iRot', ic.rot).set('iCam', ic.cam).set('iDist', ic.dist).set('burst', 0.16);
+  const camUniforms = (pr: Program, p: Plan, t: number) => {
+    const ic = innerCam(p, t);
+    pr.set('iRot', ic.rot).set('iCam', ic.cam).set('iDist', ic.dist).set('iBreath', ic.breath).set('burst', 0.16);
   };
 
-  const outStep = (t: number, tHit: number, reset: boolean) =>
-    pass(g2, B.outer!, B.out!, (p) => {
-      camUniforms(p, t);
-      p.tex('st', B.inner.read.tex[0], 0)
+  const outStep = (p: Plan, t: number, reset: boolean) =>
+    pass(g2, B.outer!, B.out!, (pr) => {
+      camUniforms(pr, p, t);
+      pr.tex('st', B.inner.read.tex[0], 0)
         .tex('sq', B.home!.read.tex[0], 1)
         .tex('op', B.outer!.read.tex[0], 2)
         .tex('od', B.outer!.read.tex[1], 3)
-        .set('W', windowAt(t, null, tHit).W)
-        .set('tRel', t - tHit)
+        .set('W', windowAt(p, t).W)
+        .set('tRel', t - p.hit)
         .set('dt', 1 / RATE)
         .set('th', THOMAS_AT)
-        .set('thR', thomasTurn(t))
+        .set('thR', thomasTurn(p, t))
+        .set('kick', 1.0)
+        .set('drag', 0.38)
         .set('reset', reset ? 1 : 0);
     });
 
-  /** splat + tonemap one context */
-  const draw = (c: Ctx, f: FrameCtx, t: number, tHit: number, target: Target | null, decay: number, gain: number) => {
+  /** histogram (decaying by weights) + splat + tonemap of one context */
+  const draw = (c: Ctx, f: FrameCtx, p: Plan, t: number, target: Target | null, decay: number, splatOn: boolean, toneSet: (pr: Program) => void) => {
     const gg = c.g, gx = gg.gl;
     const w = Math.ceil(f.w / 2), h = Math.ceil(f.h / 2);
     const fresh = !c.hist || c.hist.w !== w || c.hist.h !== h;
@@ -275,11 +388,16 @@ export function createCanvas(g: Gfx): Scene {
     // the histogram decays by `decay` per frame through the weights of new splats (W *= 1/decay; the
     // tonemap normalises by the total weight), folded back into the bins only when W gets large — no full
     // RGBA32F read-modify-write every frame
-    if (fresh || decay <= 0) {
+    // (an empty histogram that stays empty — the outside before the burst, drawing only the window's
+    // afterimages — needs neither a clear nor mips)
+    const idle = !fresh && !splatOn && c.empty;
+    const cleared = fresh || decay <= 0;
+    if (cleared && !idle) {
       gx.clearColor(0, 0, 0, 0);
       gx.clear(gx.COLOR_BUFFER_BIT);
       c.acc = 0;
       c.W = 1;
+      c.empty = true;
     } else if (decay < 1) c.W /= decay;
     if ((c.W > 1e4 || !warmed) && c.tone.use()) {
       // hist *= 1/W (any program will do, its output is ignored; keep the target off its sampler)
@@ -291,14 +409,22 @@ export function createCanvas(g: Gfx): Scene {
       c.acc /= c.W;
       c.W = 1;
     }
-    if (decay < 1 && !(c === A && t > tHit + 0.25) && c.splat.use()) {
+    if (decay < 1 && splatOn && c.splat.use()) {
       gx.blendFunc(gx.ONE, gx.ONE);
-      camUniforms(c.splat, t);
+      camUniforms(c.splat, p, t);
       c.splat.set('stW', NW).set('aspect', f.aspect).set('soft', c === B ? 1 : 0).set('wgt', c.W);
       if (c === A) {
-        c.splat.tex('st', A.inner.read.tex[0], 0).set('tRel', t - tHit).set('C0', pal.in[0]).set('C1', pal.in[1]).set('C2', pal.in[2]);
+        const m = morphAt(p, t);
+        const dm = Math.abs(morphAt(p, t + 0.05) - m) / 0.05;
+        c.splat
+          .tex('st', A.inner.read.tex[0], 0)
+          .tex('sh', A.hal!.read.tex[0], 1)
+          .set('tRel', t - p.hit)
+          .set('xk', dev.xk)
+          .set('depthK', dev.depthK)
+          .set('morph', m, 3.2, 0.3 * inhaleAt(p, t) + 0.25 * pulse(p.c.stab, t, 0.3) + 0.1 * dm, 0);
+        pal.in.forEach((col, i) => c.splat.set(`C${i}`, col));
       } else {
-        const tm = times(f);
         c.splat
           .tex('op', B.outer!.read.tex[0], 0)
           .tex('od', B.outer!.read.tex[1], 1)
@@ -307,21 +433,26 @@ export function createCanvas(g: Gfx): Scene {
           .set('sigN', sigN)
           .set('sigR', SIGIL_R)
           .set('dH', dH)
-          .set('conv', smoothstep(tm.land0, tm.land1, t))
-          .set('C0', pal.out[0]).set('C1', pal.out[1]).set('C2', pal.out[2]).set('CS', pal.sigil).set('CH', pal.heat);
+          .set('conv', smoothstep(p.land0, p.land1, t))
+          .set('OC', pal.out.flat())
+          .set('CS', pal.sigil)
+          .set('CH', pal.heat)
+          .set('heatK', Math.exp(-Math.max(0, t - p.hit) / 0.16))
+          .set('settle', smoothstep(0.7, 2.2, t - p.hit));
       }
       // landing on the sigil: a million points on one thin curve only fight over the same bins — a
       // shrinking random subset (the index order is random) draws the same picture
-      const n = c === B ? Math.round(NW * NH * (1 - 0.8 * smoothstep(times(f).land0, times(f).land1, t))) : NW * NH;
+      const n = c === B ? Math.round(NW * NH * (1 - 0.8 * smoothstep(p.land0, p.land1, t))) : NW * NH;
       gx.bindVertexArray(gg.vao);
       for (let b = 0; b < BANDS; b++) {
         c.splat.set('band', -1 + (2 * b) / BANDS, b === BANDS - 1 ? 2 : -1 + (2 * (b + 1)) / BANDS);
         gx.drawArrays(gx.POINTS, 0, n);
       }
       c.acc += n * 0.6 * c.W;
+      c.empty = false;
     }
     gx.disable(gx.BLEND);
-    if (c === B) {
+    if (c === B && !idle) {
       gx.bindTexture(gx.TEXTURE_2D, c.hist.tex[0]);
       gx.generateMipmap(gx.TEXTURE_2D);
     }
@@ -334,18 +465,12 @@ export function createCanvas(g: Gfx): Scene {
       .set('htexel', 1 / w, 1 / h)
       .set('res', ow, oh)
       .set('kNorm', (w * h) / Math.max(1, c.acc))
-      .set('ref', c === A ? 26 : 160)
-      .set('floor_', 0.3)
-      .set('expo', c === A ? 0.6 : 0.75)
-      .set('gain', gain)
-      .set('mode', c === A ? 0 : 1)
-      .set('bgA', hexLin('#24152E').map((x) => x * 0.9))
-      .set('bgB', hexLin('#0B0710'))
-      .set('bgK', c === A ? 1 - smoothstep(times(f).land0, times(f).land1 - 0.3, t) : 0)
-      .set('glow', c === B ? 0.35 - 0.2 * smoothstep(times(f).land0, times(f).land1, t) : 0, 1.0, 0.2);
+      .set('mode', c === A ? 0 : 1);
+    toneSet(c.tone);
     fullscreen(gg);
   };
 
+  const noGhost = new Float32Array(32);
   return {
     id: 'S12',
     title: 'Canvas',
@@ -353,7 +478,11 @@ export function createCanvas(g: Gfx): Scene {
     // the particles are binned one per CSS pixel anyway: tonemap + post at that resolution
     scale: 0.5,
     programs: () => [A.sim, A.splat, A.tone, B.sim, B.splat, B.tone, B.out!, B.thomas!],
-    post: { bloom: 0.15, bloomRadius: 1.1, vignette: 0, grain: 0.02, exposure: 0.1, look: [1.12, 1.15, 0, 0] },
+    post: (f) => {
+      const p = plan(f.audio);
+      const blow = Math.max(pulse(p.c.stab, f.t, 0.3), hit(f.t, p.hit, 0.01, 0.3));
+      return { bloom: 0.26 + 0.2 * blow, bloomRadius: 1.15, vignette: 0.15, grain: 0.02, exposure: 0.1 + 0.3 * blow, ca: 2.5 * blow, look: [1.1, 1.3, 0, 0] };
+    },
     init() {
       const tab = sigilTables()[6];
       sigN = tab.x.length - 1;
@@ -362,28 +491,36 @@ export function createCanvas(g: Gfx): Scene {
       sigTex = gl2.createTexture();
       gl2.bindTexture(gl2.TEXTURE_2D, sigTex);
       gl2.texImage2D(gl2.TEXTURE_2D, 0, gl2.RG32F, sigN, 1, 0, gl2.RG, gl2.FLOAT, d);
-      for (const p of [gl2.TEXTURE_MIN_FILTER, gl2.TEXTURE_MAG_FILTER]) gl2.texParameteri(gl2.TEXTURE_2D, p, gl2.NEAREST);
+      for (const q of [gl2.TEXTURE_MIN_FILTER, gl2.TEXTURE_MAG_FILTER]) gl2.texParameteri(gl2.TEXTURE_2D, q, gl2.NEAREST);
     },
     enter() {
       active = true;
-      steps = -1;
+      steps_ = -1;
       const st = g.canvas.parentElement!;
       Hcss = st.clientHeight || 945;
       dH = (parseFloat(getComputedStyle(st).perspective) || 2000) / Hcss;
+      // the window stands on a mirror: its reflection turns with it (the screen is a facade)
+      g.canvas.style.setProperty('-webkit-box-reflect', 'below 0px linear-gradient(transparent 55%, rgba(255,255,255,0.2))');
     },
     leave() {
       active = false;
       g.canvas.style.transform = '';
+      g.canvas.style.removeProperty('-webkit-box-reflect');
+      if (stage) stage.style.transform = '';
       oc.style.display = 'none';
     },
     render(f: FrameCtx, hdr: Target | null) {
       const t = f.t;
-      const tm = times(f);
-      const tHit = tm.hit;
+      const p = plan(f.audio);
+      const c = p.c;
+      const tHit = p.hit;
 
       // ---- the canvas in the stage
-      const win = windowAt(t, f, tHit);
+      const win = windowAt(p, t);
       if (active) g.canvas.style.transform = win.identity ? '' : `matrix3d(${win.css.map((x) => +x.toFixed(6)).join(',')})`;
+      // the burst shakes the whole stage (both layers together, so they stay aligned)
+      const shake = (0.012 * hit(t, tHit, 0.004, 0.22) + 0.005 * hit(t, p.stab64, 0.004, 0.18) + 0.003 * pulse(c.stab, t, 0.15)) * Hcss;
+      if (active && stage) stage.style.transform = shake > 0.05 ? `translate(calc(-50% + ${(shake * Math.sin(t * 157)).toFixed(2)}px), calc(-50% + ${(shake * Math.sin(t * 131 + 2)).toFixed(2)}px))` : '';
       // the outside at one pixel per CSS pixel, like its histogram (the compositor scales it up)
       const ow = Math.ceil(f.w / 2), oh = Math.ceil(f.h / 2);
       if (oc.width !== ow || oc.height !== oh) (oc.width = ow), (oc.height = oh);
@@ -391,42 +528,105 @@ export function createCanvas(g: Gfx): Scene {
       // ---- simulation, lock-step in both contexts
       const N = Math.max(0, Math.floor((t - T0) * RATE + 1e-6));
       const outFrom = Math.floor((tHit - T0) * RATE) - 2; // the outside's particles start just before the hit
-      if (f.jumped || steps < 0 || N < steps || N - steps > 4 * RATE || !warmed) {
+      if (f.jumped || steps_ < 0 || N < steps_ || N - steps_ > 4 * RATE || !warmed) {
         resetSim();
-        steps = 0;
+        steps_ = 0;
       }
       const allOut = Math.ceil((tHit + 0.2 - T0) * RATE); // every particle has left the canvas by then
-      while (steps < N) {
-        steps++;
-        if (steps <= allOut) aizawa(A);
-        if (steps >= outFrom) {
-          if (steps <= allOut) aizawa(B);
+      while (steps_ < N) {
+        steps_++;
+        if (steps_ <= allOut) {
+          aizawa(A);
+          if (morphAt(p, T0 + steps_ / RATE) > 0 || morphAt(p, T0 + (steps_ + RATE) / RATE) > 0) halvorsen();
+        }
+        if (steps_ >= outFrom) {
+          if (steps_ <= allOut) aizawa(B);
           thomas();
-          outStep(T0 + steps / RATE, tHit, steps === outFrom);
+          outStep(p, T0 + steps_ / RATE, steps_ === outFrom);
         }
       }
-      if (!warmed) outStep(t, tHit, true); // pipeline warm-up
+      if (!warmed) outStep(p, t, true); // pipeline warm-up
 
       // ---- the canvas: particles that have not left yet, a ghost of those that have
       const after = t - tHit;
-      const kick = f.S[CH.kick - 1] ?? 0, orch = f.S[CH.stab - 1] ?? 0;
-      const decayA = f.dt > 0 ? Math.exp(-f.dt / (after > 0 ? 0.6 : 0.12)) : 1;
-      const fadeA = 1 - smoothstep(tHit + 1.2, tm.land0 + 0.5, t);
-      draw(A, f, t, tHit, hdr, f.jumped || !warmed ? 0 : decayA, (0.9 + 0.35 * kick + 0.5 * orch) * fadeA);
+      const kick = pulse(c.kick, t, 0.1), orch = pulse(c.stab, t, 0.3);
+      const m = morphAt(p, t);
+      const dm = Math.abs(morphAt(p, t + 0.05) - m) / 0.05;
+      // light trails: a longer memory while the cloud flies between its shapes
+      const tauA = after > 0 ? 0.6 : 0.14 + 0.25 * Math.min(1, dm);
+      const decayA = f.dt > 0 ? Math.exp(-f.dt / tauA) : 1;
+      const fadeA = 1 - smoothstep(tHit + 1.2, p.land0 + 0.5, t);
+      const bgK = 1 - smoothstep(p.land0, p.land1 - 0.3, t);
+      const inh = inhaleAt(p, t);
+      const flashA = hit(t, tHit, 0.008, 0.07);
+      draw(A, f, p, t, hdr, f.jumped || !warmed ? 0 : decayA, !(t > tHit + 0.25), (pr) =>
+        pr
+          .set('ref', dev.ref)
+          .set('floor_', 0.3)
+          .set('expo', dev.expo)
+          .set('gain', (dev.gain + 0.35 * kick + 0.4 * orch + 0.5 * inh) * fadeA)
+          .set('bgA', BG[0])
+          .set('bgB', BG[1])
+          .set('bgK', bgK * (1 + 0.6 * orch))
+          .set('frame', FRAME.map((x) => x * bgK * (0.5 + 0.8 * kick + 1.5 * orch + 2 * flashA)).concat([(1.5 * (hdr?.h ?? f.h)) / 945]))
+          .set('flash', 1, 0.85, 0.95, 2 * flashA),
+      );
 
-      // ---- the outside
+      // ---- the outside: the window's afterimages before the hit, the particles after
       const outside = after > -0.02 || !warmed;
-      if (active) oc.style.display = outside ? 'block' : 'none';
-      if (outside) {
-        const decayB = f.dt > 0 ? Math.exp(-f.dt / 0.04) : 1;
-        draw(B, f, t, tHit, null, f.jumped || !warmed || !wasOutside ? 0 : decayB, (1 + 0.6 * hit(t, tHit, 0.01, 0.5) + 0.25 * kick) * (1 + smoothstep(tm.land0, tm.land1, t)));
+      const ghost = new Float32Array(32), gI = [0, 0, 0, 0];
+      // 0: the full-screen frame the canvas leaves behind at 18:00
+      const g0 = 0.9 * Math.exp(-Math.max(0, t - T0) / 0.6) * (t >= T0 ? 1 : 0);
+      if (g0 > 0.003) {
+        ghost.set([0, 0, ow, 0, ow, oh, 0, oh], 0);
+        gI[0] = g0;
+      }
+      // 1–3: where the window was 1, 2, 3 frames-worth ago — visible only when it moves fast
+      const q0 = corners(win.W, f.aspect, ow, oh);
+      for (let k = 1; k <= 3 && q0 && t < tHit + 0.1; k++) {
+        const q = corners(windowAt(p, t - 0.045 * k).W, f.aspect, ow, oh);
+        if (!q) continue;
+        let disp = 0;
+        for (let j = 0; j < 8; j++) disp = Math.max(disp, Math.abs(q[j] - q0[j]));
+        const I = 0.55 * 0.62 ** (k - 1) * smoothstep(0.004, 0.04, disp / oh) * (t > T0 + 0.02 ? 1 : 0);
+        if (I > 0.003) {
+          ghost.set(q, k * 8);
+          gI[k] = I;
+        }
+      }
+      const showOut = outside || gI.some((x) => x > 0);
+      if (active) oc.style.display = showOut ? 'block' : 'none';
+      if (showOut) {
+        const cHit = corners(windowAt(p, tHit).W, f.aspect, ow, oh);
+        const cx = cHit ? (cHit[0] + cHit[2] + cHit[4] + cHit[6]) / 4 : ow / 2, cy = cHit ? (cHit[1] + cHit[3] + cHit[5] + cHit[7]) / 4 : oh / 2;
+        const ringA = (t0: number, v: number, sp: number) => {
+          const x = t - t0;
+          return x < 0 ? [cx, cy, 0, 0] : [cx, cy, oh * sp * (1 - Math.exp(-x / 0.35)), v * Math.exp(-x / 0.4)];
+        };
+        const conv = smoothstep(p.land0, p.land1, t);
+        const decayB = f.dt > 0 ? Math.exp(-f.dt / (0.04 + 0.12 * Math.exp(-Math.max(0, after) / 0.5))) : 1;
+        const flashB = hit(t, tHit, 0.006, 0.12);
+        draw(B, f, p, t, null, f.jumped || !warmed || !wasOutside || !outside ? 0 : decayB, outside, (pr) =>
+          pr
+            .set('ref', 160)
+            .set('floor_', 0.3)
+            .set('expo', 0.75)
+            .set('gain', (1 + 0.8 * hit(t, tHit, 0.01, 0.5) + 0.3 * kick + 0.4 * pulse(c.crash, t, 0.3) * (after > 0 ? 1 : 0)) * (1 + 2.4 * conv))
+            .set('glow', 0.45 - 0.43 * conv, 1.0, 0.25 - 0.05 * conv)
+            .set('look', 1.1 - 0.02 * conv, 1.3)
+            .set('flash', 1, 0.55, 0.85, 0.7 * flashB)
+            .set('ring', [...ringA(tHit, 1.6, 1.4), ...ringA(tHit + 0.07, 0.8, 0.9)])
+            .set('ghost', gI.some((x) => x > 0) ? ghost : noGhost)
+            .set('ghostI', gI)
+            .set('ghostC', FRAME.map((x) => x * 1.4)),
+        );
       }
       wasOutside = outside;
       if (!warmed) {
         // the loader renders this scene once before the hit: make sure every pipeline of the outside exists
         bindTarget(g, hdr);
         warmed = true;
-        steps = -1;
+        steps_ = -1;
       }
     },
   };

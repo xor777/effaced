@@ -35,7 +35,8 @@ void main() {
       vec3 n = normalize((W * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
       vec3 rad = (W * vec4(v.xy, 0.0, 0.0)).xyz;
       vec3 jit = vec3(hash1(k), hash1(k + 1u), hash1(k + 2u)) - 0.5;
-      D.xyz = (n * (1.0 + 2.2 * hash1(k + 3u)) + rad * (3.6 + 4.0 * hash1(k + 4u)) + cross(n, rad) * 2.4 + jit * 1.1) * kick;
+      // nearly the same for all: the creature's shape survives the blast, magnified, rushing at us
+      D.xyz = (n * (1.2 + 0.3 * hash1(k + 3u)) + rad * (4.2 + 0.4 * hash1(k + 4u)) + cross(n, rad) * 1.6 + jit * 0.1) * kick;
       P.w = 1.0;
     }
   } else {

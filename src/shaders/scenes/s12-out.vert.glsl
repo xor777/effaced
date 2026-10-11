@@ -12,7 +12,8 @@ uniform float dH;       // CSS perspective distance (H units)
 uniform float conv;     // 0..1: landing on the sigil
 uniform vec3 OC[4];     // a cycle of four colours round the Thomas attractor's lobes
 uniform vec3 CS, CH;    // the sigil's light, the heat of the burst
-uniform float heatK;    // how long the burst stays white-hot
+uniform float heatK;    // the burst's white heat, fading
+uniform float settle;   // 0 in flight (colour by direction) … 1 home on the attractor (colour by lobe)
 uniform vec2 band;      // NDC y range drawn by this pass
 out vec3 col;
 
@@ -52,8 +53,13 @@ void main() {
   int i = int(h);
   float f = smoothstep(0.0, 1.0, h - float(i));
   vec3 c = mix(OC[i], OC[(i + 1) % 4], f) * (0.75 + 0.5 * w);
+  // in flight, by the direction it was thrown: the explosion is a wheel of colour, not grey mist
+  float hd = fract(atan(D.y, D.x) / TAU + 0.25) * 4.0;
+  int j = int(hd);
+  vec3 cd = mix(OC[j], OC[(j + 1) % 4], smoothstep(0.0, 1.0, hd - float(j)));
+  c = mix(cd, c, settle);
   // sparks: white-hot while they fly, cooling into the palette
-  c = mix(c, CH, clamp((sp - 0.3) / max(0.05, 2.2 * heatK), 0.0, 1.0));
+  c = mix(c, CH, clamp(sp * 0.3, 0.0, 1.0) * heatK);
   col = mix(c, CS, e);
   col /= max(1.0, 0.45 * sz * sz);
 }

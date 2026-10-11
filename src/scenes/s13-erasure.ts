@@ -2,9 +2,9 @@
 // collapses into one single point — the fixation point of S14. 1B:60–63: one beat of silence, black
 // and the point, drawn exactly like the first frame of S14.
 //
-// Chaos game on the GPU (Draves & Reckase): 786k persistent walkers, one step per pass; each step is
-// splatted into an RGBA32F histogram (Σ colour, Σ count) that decays across frames, then log-density
-// tonemapped. Transform 0 is a condensation map onto the sigil (the same contour the scope voice
+// Chaos game on the GPU (Draves & Reckase): 786k persistent walkers, one step per pass, two per frame
+// at 60 Hz; each step is splatted into an RGBA32F histogram (Σ colour, Σ count) that decays across
+// frames (per second, not per frame), then log-density tonemapped. Transform 0 is a condensation map onto the sigil (the same contour the scope voice
 // draws in S00, src/audio/synth/scope.ts), so the attractor is the sigil plus all its images.
 //
 // The flame spells the word. Every note of the lead (ch10) is a letter A–F, and every letter has its
@@ -23,9 +23,14 @@ import { ROW, ROWS } from '../timeline/script.ts';
 import { sigilTables } from '../audio/synth/scope.ts';
 import { cues, pulse, steps, swell, lastAt, type Ev } from './s12-s13-cues.ts';
 
-const SW = 1024, SH = 768; // 786k walkers, one splat each per frame at 120 Hz…
+const SW = 1024, SH = 768; // 786k walkers, two splatted steps each per frame at 60 Hz…
 const TAU_K = (1024 * 1024) / (SW * SH); // …and a histogram that remembers that much longer: the same samples per bin
-const ITER = 1; // splatted steps per frame (1M splats ≈ 3.5 ms at 3024×1890; 120 Hz × 1 = 60 Hz × 2 samples/s)
+/**
+ * Splatted steps per frame. The scene runs at 60 Hz: the flame now fills the screen on the big letters
+ * (C, A, F) and the dives, and a frame-filling flame costs more than 8 ms on the M4 — at 120 Hz it would
+ * oscillate. 60 Hz × 2 = 120 Hz × 1 samples/s; the decay is per second (dt), so the picture is the same.
+ */
+const ITER = 2;
 const BURN = 10;
 /**
  * Points are splatted in horizontal bands, one draw each, the vertex shader culling everything outside:
@@ -116,7 +121,7 @@ const FAMILY: Record<string, GenomeSpec> = {
   // F · flares: the copies thrown outwards along hyperbolae, a swirl pulls them into tongues
   F: {
     w0: 0.1,
-    zoom: 1.3,
+    zoom: 1.6,
     spin: 0.5,
     hue: 0.2,
     twist: 0.18,
@@ -129,7 +134,7 @@ const FAMILY: Record<string, GenomeSpec> = {
   // A · the aureole: spheres and bubbles — the circle of the sigil multiplied into rings
   A: {
     w0: 0.12,
-    zoom: 1.45,
+    zoom: 1.5,
     spin: -0.4,
     hue: 0.45,
     bulge: 0.15,
@@ -142,7 +147,7 @@ const FAMILY: Record<string, GenomeSpec> = {
   // C · the cyclone: two arms of sigils wound on a log-spiral
   C: {
     w0: 0.07,
-    zoom: 1.25,
+    zoom: 1.85,
     spin: -0.6,
     hue: 0.65,
     twist: 0.25,
@@ -155,7 +160,7 @@ const FAMILY: Record<string, GenomeSpec> = {
   // D · Droste discs: the flame nested inside its own discs, small and dense
   D: {
     w0: 0.12,
-    zoom: 0.78,
+    zoom: 0.68,
     spin: 1.0,
     hue: 0.85,
     xf: [
@@ -167,7 +172,7 @@ const FAMILY: Record<string, GenomeSpec> = {
   // B · lace: Julia threads and a handkerchief, fine and wide
   B: {
     w0: 0.1,
-    zoom: 1.15,
+    zoom: 1.3,
     spin: 0.8,
     hue: 0.3,
     mir: 0.5,
@@ -202,7 +207,6 @@ const lerpG = (out: Float32Array, a: Float32Array, b: Float32Array, k: number) =
   return out;
 };
 const easeOut = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - (1 - x) ** 3);
-const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 /** a spring step: 0 → 1 with one overshoot */
 const spring = (x: number) => (x <= 0 ? 0 : 1 - Math.exp(-5 * x) * Math.cos(7 * x));
 const NOTE = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
@@ -293,13 +297,13 @@ export function createErasure(g: Gfx): Scene {
     return G;
   };
 
-  /** genome → uniforms (X, CP); `cx`: the collapse (0..1) pulls every transform in */
-  const upload = (gn: Float32Array, cx: number) => {
+  /** genome → uniforms (X, CP); `cx`: the collapse (0..1) pulls every transform in; `efface`: the sigil wanes */
+  const upload = (gn: Float32Array, cx: number, efface: number) => {
     X.fill(0);
     // 0: the sigil
     X[4 * 1 + 2] = 0; // colour 0
     X[4 * 1 + 3] = 1; // speed
-    const w = [gn[0]];
+    const w = [gn[0] * (1 - efface)];
     for (let j = 0; j < NXF; j++) {
       const o = HL + j * XL, k = (j + 1) * 24;
       const rot = gn[o + 1] + 2.5 * cx * cx, sx = gn[o + 2] * (1 - 0.3 * cx), sy = gn[o + 3] * (1 - 0.3 * cx), sk = gn[o + 4];
@@ -341,6 +345,7 @@ export function createErasure(g: Gfx): Scene {
   return {
     id: 'S13',
     title: 'Erasure',
+    fps: 60,
     // the histogram has one bin per CSS pixel: tonemap and post at that resolution too (the composite
     // upsamples) — the same picture for half the fill
     scale: 0.5,
@@ -354,7 +359,7 @@ export function createErasure(g: Gfx): Scene {
       return {
         tonemap: 'agx',
         exposure: 0.25 + 0.35 * blow * fadeEnd,
-        bloom: (0.22 + 0.25 * blow) * fadeEnd + 0.02,
+        bloom: (0.12 + 0.1 * smoothstep(TA, TA + 0.6, f.t) + 0.25 * blow) * fadeEnd + 0.02, // (softer on the hand-over frame: S12 lands the sigil crisp)
         bloomRadius: 1.2,
         vignette: 0.3 * fadeEnd,
         grain: 0.025 * fadeEnd,
@@ -407,14 +412,15 @@ export function createErasure(g: Gfx): Scene {
       // symmetry by section; within the heartbeat it climbs to a full ring
       let si = 0;
       while (si + 1 < SYM.length && r >= SYM[si + 1][0]) si++;
-      const sym = [SYM[si][1], SYM[si][2], gn[3]];
+      const sym = [SYM[si][1], SYM[si][2] * Math.min(1, grow), gn[3]]; // (the sigil alone at 1A:00, as S12 lands it)
       if (r >= 96) sym[1] = Math.max(sym[1], 0.4 + 0.6 * fold);
       // a new section snaps in through a glitch: fractional n for a moment (the polygons of S11 breaking)
       if (si > 0 && !dev.pin) {
         const k = easeOut((r - SYM[si][0]) / 2.5);
         if (k < 1) sym[0] = SYM[si - 1][1] + (SYM[si][1] - SYM[si - 1][1]) * k;
       }
-      upload(gn, cx);
+      // the flame effaces the sigil it grew from: its own weight wanes through the scene
+      upload(gn, cx, 0.6 * smoothstep(TA + 0.5, TA + 9, t) * (1 - cx));
 
       // ---- camera: whips on the hits, a pulse on the kick, the dive on the tom run, the collapse
       const hitsUp = steps(p.hits, t, 0.18);
@@ -428,10 +434,14 @@ export function createErasure(g: Gfx): Scene {
       const zoomL = gn[1] + (1 - gn[1]) * fold; // the heartbeat takes the letters' sizes away
       // the unison: one blow outwards, then the implosion (ease-in, the last of it fast)
       const blowOut = pulse([{ t: p.unison, midi: 0, v: 1 }], t, 0.12, 0.03);
-      const S = base * zoomL * breath * (1 + 0.18 * blowOut) * (1 + 1.4 * diveK) * (1 - 0.55 * fold) * (1 - crush) ** 2.2;
+      // each heartbeat a contraction (systole), released in the gap
+      const thump = t > (P1B + 31.5) * ROW ? pulse(c.kick, t, 0.11, 0.02) : 0;
+      // 1A:00, the last EFFACED, glorious: the flame flares out over the whole screen and settles
+      const flare = t >= TA ? (1 - Math.exp(-(t - TA) / 0.06)) * Math.exp(-(t - TA) / 0.45) : 0;
+      const S = base * zoomL * breath * (1 + 1.1 * flare) * (1 - 0.16 * thump) * (1 + 0.18 * blowOut) * (1 + 1.8 * diveK) * (1 - 0.55 * fold) * (1 - crush) ** 2.2;
       const psi = gn[2] + 0.06 * (t - TA) + 0.55 * hitsUp * (1 - 0.6 * crush) + snareJ - 1.1 * diveK + 2.4 * cx * cx;
-      // the dive heads for the top vertex of the triangle, where the flame buds
-      const dv = [0, 0.7 * diveK];
+      // the dive goes through the inner circle of the sigil — the "+1" — into the flame's own core
+      const dv = [0, 0.1 * diveK];
       const cs = Math.cos(psi), sn = Math.sin(psi);
       const off = [-(cs * dv[0] - sn * dv[1]) * S, -(sn * dv[0] + cs * dv[1]) * S];
       const twist = gn[4] + 0.9 * diveK + 1.2 * fold - 0.5 * crush;
@@ -439,7 +449,7 @@ export function createErasure(g: Gfx): Scene {
 
       // palette: lydian 1A, phrygian 1B, white heat in the collapse; each blow turns it a fifth of a turn
       const toB = smoothstep(TB - 0.05, TB + 2 * ROW, t);
-      const heat = Math.min(1, 0.2 * fold + 1.3 * crush);
+      const heat = 0.7 * Math.min(1, 0.2 * fold + 1.3 * crush);
       for (let i = 0; i < 18; i++) PAL[i] = (PAL_LYD[i] * (1 - toB) + PAL_PHR[i] * toB) * (1 - heat) + PAL_HOT[i] * heat;
       const palShift = gn[6] + 0.2 * steps(p.hits, t, 0.3, false, TA + 0.05);
 
@@ -480,6 +490,12 @@ export function createErasure(g: Gfx): Scene {
         acc /= W;
         W = 1;
       }
+      // A flame that shrinks to a point would pile every walker into the same few bins, and additive
+      // blending into one pixel serialises (the collapse took ~60 ms a frame): a small flame plots a
+      // random subset (any subset of the walkers is a sample of the same attractor), ∝ its area.
+      const nPts = Math.round(SW * SH * Math.min(1, Math.max(0.012, (S / 0.15) ** 2)));
+      // (when the flame is a few pixels wide, a few splats per bin make the same picture)
+      const bands = nPts < SW * SH * 0.25 ? 1 : BANDS;
       for (let i = 0; i < iters; i++) {
         gl.disable(gl.BLEND);
         step(shr, shr, sym, false);
@@ -497,12 +513,12 @@ export function createErasure(g: Gfx): Scene {
             .set('PAL', PAL)
             .set('wgt', W);
           gl.bindVertexArray(g.vao);
-          for (let b = 0; b < BANDS; b++) {
-            splat.set('band', -1 + (2 * b) / BANDS, b === BANDS - 1 ? 2 : -1 + (2 * (b + 1)) / BANDS);
-            gl.drawArrays(gl.POINTS, 0, SW * SH);
+          for (let b = 0; b < bands; b++) {
+            splat.set('band', bands === 1 ? -2 : -1 + (2 * b) / BANDS, b === bands - 1 ? 2 : -1 + (2 * (b + 1)) / BANDS);
+            gl.drawArrays(gl.POINTS, 0, nPts);
           }
         }
-        acc += SW * SH * W;
+        acc += nPts * W;
       }
       gl.disable(gl.BLEND);
 
@@ -512,7 +528,7 @@ export function createErasure(g: Gfx): Scene {
       const roll = Math.min(1, swell(c.snare, t, 0.1, (P1B + 31.5) * ROW) * 0.25);
       if (tone.use()) {
         // a dive spreads the walkers over a larger plane: the same light per visible bin
-        const zoom = Math.max(0.5, (1 + 1.4 * diveK) * zoomL) ** 2;
+        const zoom = Math.max(0.5, (1 + 1.8 * diveK) * zoomL) ** 2;
         tone
           .tex('hist', hist.tex[0], 0)
           .set('res', hdr!.w, hdr!.h)
@@ -523,7 +539,9 @@ export function createErasure(g: Gfx): Scene {
           .set('expo', 2.2 / 3.4)
           .set('satur', 1.45 - 0.45 * crush)
           .set('gain', (1.05 + 0.3 * kick + 0.5 * pulse(p.hits, t, 0.2) + 0.4 * roll + 1.5 * crush) * (1 - smoothstep(p.unison + 5 * ROW, p.unison + 9 * ROW, t)))
-          .set('dotP', (2.5 * hdr!.h) / 945, 4 * dotK);
+          .set('dotP', (2.5 * hdr!.h) / 945, 4 * dotK)
+          // the unison: the light leaves as a ring while the flame falls in
+          .set('ring', (Math.max(0, t - p.unison) / 0.5) ** 0.6 * hdr!.h * 0.9, t > p.unison ? 2.2 * Math.exp(-(t - p.unison) / 0.3) : 0);
         fullscreen(g);
       }
       warmed = true;

@@ -13,6 +13,7 @@ uniform float floor_; // density below which a bin stays black (no haze from the
 uniform float expo;   // 2.2 / flam3 gamma
 uniform float gain;
 uniform vec2 dotP;    // the point: radius (px), linear intensity
+uniform vec2 ring;    // the unison's ring: radius (px), intensity
 uniform float satur;  // saturation of the mean colour (flam3's vibrancy, pushed: averaging greys the palette)
 
 void main() {
@@ -32,5 +33,9 @@ void main() {
   vec3 col = avg * pow(al, expo) * gain;
   float r = length(gl_FragCoord.xy - 0.5 * res);
   col += vec3(dotP.y * clamp(dotP.x + 0.5 - r, 0.0, 1.0));
+  if (ring.y > 0.0) {
+    float wd = 2.0 + ring.x * 0.03;
+    col += ring.y * (vec3(1.0, 0.9, 1.0) * exp(-pow((r - ring.x) / wd, 2.0)) + vec3(0.5, 0.2, 1.0) * 0.1 * exp(-pow((r - ring.x * 0.93) / (wd * 3.0), 2.0)));
+  }
   o = vec4(col, 1.0);
 }

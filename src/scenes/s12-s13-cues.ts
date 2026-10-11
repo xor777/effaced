@@ -114,9 +114,3 @@ export function steps(ev: Ev[], t: number, d: number, vel = true, from = -Infini
   for (let i = 0; i <= n; i++) if (ev[i].t >= from) s += (vel ? ev[i].v : 1) * (1 - Math.exp(-Math.max(0, t - ev[i].t) / d));
   return s;
 }
-
-/** seconds since the last event (Infinity before the first) */
-export function since(ev: Ev[], t: number): number {
-  const i = lastAt(ev, t);
-  return i < 0 ? Infinity : t - ev[i].t;
-}

@@ -74,19 +74,19 @@ void main() {
     for (int i = 0; i < 4; i++) {
       if (ghostI[i] <= 0.0) continue;
       vec2 q = quad(i, px);
-      col += ghostC * ghostI[i] * (smoothstep(lw + 1.0, lw * 0.3, q.x) + 0.35 * exp(-q.x / (lw * 10.0)) + 0.05 * q.y);
+      col += ghostC * ghostI[i] * (smoothstep(lw + 1.0, lw * 0.3, q.x) + 0.2 * exp(-q.x / (lw * 8.0)));
     }
     // the burst: a flash around the window and two shock rings
     for (int i = 0; i < 2; i++) {
       if (ring[i].w <= 0.0) continue;
       float r = length(px - ring[i].xy);
-      float wdt = res.y * 0.006 + ring[i].z * 0.05;
+      float wdt = res.y * 0.003 + ring[i].z * 0.015;
       col += ring[i].w * vec3(1.0, 0.86, 0.95) * exp(-pow((r - ring[i].z) / wdt, 2.0));
-      col += ring[i].w * 0.25 * vec3(1.0, 0.55, 0.8) * exp(-pow((r - ring[i].z * 0.8) / (wdt * 4.0), 2.0));
+      col += ring[i].w * 0.06 * vec3(1.0, 0.15, 0.6) * exp(-pow((r - ring[i].z * 0.95) / (wdt * 3.0), 2.0));
     }
     if (flash.a > 0.0) {
       float r = length(px - ring[0].xy) / res.y;
-      col += flash.rgb * flash.a * (0.15 + exp(-r * r * 6.0));
+      col += flash.rgb * flash.a * (0.04 + exp(-r * r * 8.0));
     }
     col = agxEotf(agxLook(agx(col * exp2(glow.z)), look.x, look.y));
     col += (ign(gl_FragCoord.xy) - 0.5) / 255.0;
