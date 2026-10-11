@@ -67,7 +67,10 @@ export class Memories {
     const gl = this.g.gl;
     const target = Math.floor(t * FIRE_RATE);
     let from = this.fireStep;
-    if (jumped || from < 0 || target < from || target - from > 200) from = target - 40; // pre-roll: flames up in 40 steps
+    // the first time: pre-roll 40 steps (flames up); after that a jump or a scene cut just carries on
+    // from the live state (a pre-roll at a cut is 40 render passes in one frame)
+    if (from < 0) from = target - 40;
+    else if (jumped || target < from || target - from > 8) from = target - 1;
     if (target <= from || !this.fireProg.use()) {
       this.fireStep = Math.max(this.fireStep, target);
       return;

@@ -113,8 +113,8 @@ export function createEscher(g: Gfx): Scene {
       const kick = f.S[0] ?? 0;
       mem.update(f.t, f.jumped, kick);
 
-      // the city level is static: render it once (dev: again after a seek, to pick up shader edits)
-      if ((!cityDone || (import.meta.env.DEV && f.jumped)) && city.use()) {
+      // the city level is static: render it once (dev: again after a seek — not at a cut — for shader edits)
+      if ((!cityDone || (import.meta.env.DEV && f.jumped && f.dt === 0)) && city.use()) {
         bindTarget(g, cT);
         city.set('res', C_W, C_H);
         fullscreen(g);

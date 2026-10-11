@@ -379,6 +379,14 @@ export class TrackerHud {
   }
 
   setTrack(track: TrackInfo | null) {
+    // the render's track and the module read in the loader are the same song: keep what's built
+    const same = (a: TrackInfo | null, b: TrackInfo | null) =>
+      !!a && !!b && a.title === b.title && a.patterns.length === b.patterns.length &&
+      a.order.join() === b.order.join() && a.instruments.join('\n') === b.instruments.join('\n');
+    if (same(this.track, track)) {
+      this.track = track;
+      return;
+    }
     this.track = track;
     this.patCache.clear();
     this.blockOf = [-2, -2];
@@ -441,6 +449,19 @@ export class TrackerHud {
     if (on === this.shown) return;
     this.shown = on;
     this.view.style.display = on ? '' : 'none';
+  }
+
+  /**
+   * Lay out and raster the panel before its scene: shown at opacity 0.001 (invisible, but Chrome
+   * rasters it) at the scene's first camera, with the first pattern block in place — so the cut
+   * doesn't pay for the first layout and the GPU raster of 2.3 Mpx of text.
+   */
+  prime(play: HudPlay, place: () => void) {
+    this.view.style.display = '';
+    this.shown = true;
+    this.setOpacity(0.001);
+    place();
+    this.update(play);
   }
 
   /**

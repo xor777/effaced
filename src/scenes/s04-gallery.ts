@@ -416,6 +416,9 @@ export function createGallery(g: Gfx): Scene {
       camera: (τ: number) => camera(τ, 0),
     };
 
+  const placeHud = (h: TrackerHud, v: View) =>
+    h.place(viewMatrix(v), 2 * Math.atan(v.tanH), [-HALL.HW, (HUD_RECT.Y0 + HUD_RECT.Y1) / 2, (HUD_RECT.Z0 + HUD_RECT.Z1) / 2], [0, 0, -1], [0, 1, 0]);
+
   /** the camera at τ (s into the cue); sn: snare pulse for the micro-shake (as in S03) */
   function camera(τ: number, sn: number): View {
     const eye = path(EYE, τ, true);
@@ -444,7 +447,16 @@ export function createGallery(g: Gfx): Scene {
     init() {
       mem.init();
       gal.init();
-      ensureHud(); // build the DOM while the loader runs, not at the cut
+      const h = ensureHud(); // build the DOM while the loader runs, not at the cut
+      // read the song in the loader too (the render's track arrives only after it), then lay out and
+      // raster the screen as it will be at 07:00 — the first S04 frame then costs only its own work
+      devTrack().then((t) => {
+        if (!t || active) return;
+        if (!track) track = t;
+        h.setTrack(t);
+        const v = camera(0, 0);
+        h.prime({ pos: 7, row: 0, rowT: 1, t: G0 * ROW }, () => placeHud(h, v));
+      });
     },
     enter() {
       active = true;
@@ -495,7 +507,7 @@ export function createGallery(g: Gfx): Scene {
       const expo = 1 + 2.6 * Math.exp(-τ / 0.35);
 
       if (active && hud) {
-        hud.place(viewMatrix(v), 2 * Math.atan(v.tanH), [-HALL.HW, (HUD_RECT.Y0 + HUD_RECT.Y1) / 2, (HUD_RECT.Z0 + HUD_RECT.Z1) / 2], [0, 0, -1], [0, 1, 0]);
+        placeHud(hud, v);
         const row = Math.floor(f.prow);
         hud.update({ pos: f.pos, row, rowT: (f.prow - row) * ROW, t: f.t });
         hud.setOpacity(1);
