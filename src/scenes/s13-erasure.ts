@@ -4,23 +4,28 @@
 //
 // Chaos game on the GPU (Draves & Reckase): 786k persistent walkers, one step per pass, two per frame
 // at 60 Hz; each step is splatted into an RGBA32F histogram (Σ colour, Σ count) that decays across
-// frames (per second, not per frame), then log-density tonemapped. Transform 0 is a condensation map onto the sigil (the same contour the scope voice
-// draws in S00, src/audio/synth/scope.ts), so the attractor is the sigil plus all its images.
+// frames (per second, not per frame), then log-density tonemapped. Transform 0 is a condensation map
+// onto the sigil — the square maze and its way out, the contour the scope voice draws in S00
+// (src/audio/synth/scope.ts) — and now and then onto its "+1", so the attractor is the maze plus all its
+// images, and every image of the +1 is a star.
 //
 // The flame spells the word. Every note of the lead (ch10) is a letter A–F, and every letter has its
-// own flame — a genome of six transforms (affine + 16 flam3 variations): E the sigil budding at its
-// triangle, F flares, A an aureole of rings, C a cyclone, D nested discs, B lace. EFFACED in 1A is
-// spelt as seven shapes, repeated letters come back turned. The section hits re-cut the symmetry
-// (3 → 5 → 17 → 257, the Fermat primes of the creature; 1A:00/16/32/48), turn the palette and whip the
-// camera; the tom run 1A:56–63 dives into the flame and the orchestra hit of 1B:00 throws us back out
-// into E phrygian (cold palette). 1B:32–47 the heartbeat folds it: every kick a contraction, the
-// symmetry climbs to 257 — the flame becomes a ring — and the unison E (1B:48) implodes it to a point.
+// own flame — a genome of six transforms (affine + 16 flam3 variations) seeded on the maze: E the maze
+// budding at its corners and unwinding about its innermost cell, F flares thrown out along the way out,
+// A an aureole of bubbles at its corners, C its spiral unwound into a cyclone, D the maze nested in
+// itself a quarter turn smaller (Droste), B lace. EFFACED in 1A is spelt as seven shapes, repeated
+// letters come back a quarter turn on. The section hits re-cut the symmetry (3 → 5 → 17 → 257, the
+// Fermat primes of the creature; 1A:00/16/32/48), turn the palette and whip the camera; the tom run
+// 1A:56–63 dives into the maze's innermost cell and the orchestra hit of 1B:00 throws us back out into
+// E phrygian (cold palette). 1B:32–47 the heartbeat folds it and draws the view along the way out: every
+// kick a contraction, the symmetry climbs to 257 — the flame becomes a ring round the +1 — and the
+// unison E (1B:48) implodes everything into the +1, at the centre of the screen: S14's light point.
 
 import { type Gfx, type Target, program, ensureTarget, bindTarget, fullscreen, PingPong } from '../gfx/gl.ts';
 import type { Scene, FrameCtx } from './types.ts';
 import { markerTimes, smoothstep } from '../timeline/events.ts';
 import { ROW, ROWS } from '../timeline/script.ts';
-import { sigilTables, SIGIL_FULL } from '../audio/synth/scope.ts';
+import { sigilTables, sigilPlusOne, SIGIL_FULL, SIGIL_MAZE } from '../audio/synth/scope.ts';
 import { cues, pulse, steps, swell, lastAt, type Ev } from './s12-s13-cues.ts';
 
 const SW = 1024, SH = 768; // 786k walkers, two splatted steps each per frame at 60 Hz…
@@ -102,93 +107,129 @@ const genome = (g: GenomeSpec): Float32Array => {
   });
   return a;
 };
-const tri = (k: number, r: number, a0 = Math.PI / 2): [number, number] => [r * Math.cos(a0 + (k * 2 * Math.PI) / 3), r * Math.sin(a0 + (k * 2 * Math.PI) / 3)];
 
 /** the sigil alone: S12's landing, S13's first frame */
 const SIGIL = genome({ w0: 1, xf: [] });
 
-/** one flame per letter of the creature's alphabet: each its own shape, size, turn and colours */
-const FAMILY: Record<string, GenomeSpec> = {
-  // E · the seed: the sigil buds at the three vertices of its triangle, a spiral and an inversion
-  E: {
-    w0: 0.2,
-    xf: [
-      ...[0, 1, 2].map((k): XfSpec => ({ w: 0.14, rot: 0.55, s: 0.46, o: tri(k, 0.52), col: 0.25 + 0.2 * k, cs: 0.6, v: { lin: 0.66, sph: 0.1, julia: 0.14, bubble: 0.1 } })),
-      { w: 0.16, rot: 0.42, s: 0.84, col: 0.85, cs: 0.35, v: { lin: 0.9, disc: 0.1 } },
-      { w: 0.1, rot: 0.25, s: 0.45, col: 1, cs: 0.6, v: { sph: 0.7, julia: 0.3 } },
-    ],
-  },
-  // F · flares: the copies thrown outwards along hyperbolae, a swirl pulls them into tongues
-  F: {
-    w0: 0.1,
-    zoom: 1.6,
-    spin: 0.5,
-    hue: 0.2,
-    twist: 0.18,
-    xf: [
-      ...[0, 1, 2].map((k): XfSpec => ({ w: 0.13, rot: 1.05, s: 0.55, sy: 0.4, o: tri(k, 0.7), col: 0.2 + 0.25 * k, cs: 0.65, v: { lin: 0.4, hyper: 0.35, swirl: 0.25 } })),
-      { w: 0.22, rot: 0.28, s: 0.9, sy: 0.82, col: 0.95, cs: 0.3, v: { lin: 0.7, swirl: 0.3 } },
-      { w: 0.12, rot: -0.6, s: 0.5, col: 0.6, cs: 0.7, v: { hank: 0.4, lin: 0.3, polar: 0.3 } },
-    ],
-  },
-  // A · the aureole: spheres and bubbles — the circle of the sigil multiplied into rings
-  A: {
-    w0: 0.12,
-    zoom: 1.5,
-    spin: -0.4,
-    hue: 0.45,
-    bulge: 0.15,
-    xf: [
-      ...[0, 1, 2].map((k): XfSpec => ({ w: 0.1, rot: 0.2, s: 0.5, o: tri(k, 0.7, -Math.PI / 2), col: 0.3 + 0.2 * k, cs: 0.6, v: { bubble: 0.6, sph: 0.25, lin: 0.15 } })),
-      { w: 0.2, rot: Math.PI / 5, s: 0.95, col: 0.9, cs: 0.25, v: { lin: 0.85, bubble: 0.15 } },
-      { w: 0.16, rot: 0.1, s: 0.7, col: 0.15, cs: 0.6, v: { sph: 0.55, eyefish: 0.45 } },
-    ],
-  },
-  // C · the cyclone: two arms of sigils wound on a log-spiral
-  C: {
-    w0: 0.07,
-    zoom: 1.85,
-    spin: -0.6,
-    hue: 0.65,
-    twist: 0.25,
-    xf: [
-      { w: 0.62, rot: 0.27, s: 0.94, col: 0.9, cs: 0.15, v: { lin: 1 } },
-      { w: 0.2, s: 0.22, o: [0.95, 0], col: 0.3, cs: 0.7, v: { lin: 0.7, julia: 0.3 } },
-      { w: 0.11, rot: Math.PI, s: 0.3, o: [-0.95, 0], col: 0.55, cs: 0.7, v: { lin: 1 } },
-    ],
-  },
-  // D · Droste discs: the flame nested inside its own discs, small and dense
-  D: {
-    w0: 0.12,
-    zoom: 0.68,
-    spin: 1.0,
-    hue: 0.85,
-    xf: [
-      { w: 0.45, rot: 0.6, s: 0.72, col: 0.9, cs: 0.3, v: { disc: 0.4, lin: 0.6 } },
-      ...[0, 1, 2].map((k): XfSpec => ({ w: 0.08, rot: -0.4, s: 0.28, o: tri(k, 0.75), col: 0.35 + 0.15 * k, cs: 0.6, v: { lin: 1 } })),
-      { w: 0.1, rot: Math.PI, s: 0.62, col: 0.1, cs: 0.5, v: { sph: 0.6, heart: 0.4 } },
-    ],
-  },
-  // B · lace: Julia threads and a handkerchief, fine and wide
-  B: {
-    w0: 0.1,
-    zoom: 1.3,
-    spin: 0.8,
-    hue: 0.3,
-    mir: 0.5,
-    xf: [
-      ...[0, 1, 2].map((k): XfSpec => ({ w: 0.12, rot: 0.9, s: 0.7, o: tri(k, 0.55), col: 0.25 + 0.25 * k, cs: 0.6, v: { julia: 0.75, lin: 0.25 } })),
-      { w: 0.2, rot: 0.15, s: 0.88, col: 0.85, cs: 0.3, v: { lin: 0.8, ex: 0.2 } },
-      { w: 0.12, rot: -0.3, s: 0.55, col: 0.05, cs: 0.6, v: { hank: 0.5, sin: 0.5 } },
-    ],
-  },
-};
-FAMILY.G = FAMILY.E; // (the lead has no G in 1A–1B; the letter that isn't hex falls back to the seed)
+type P2 = [number, number];
+/**
+ * The maze in the sigil tables' coordinates (centred on its centroid, max |coord| = 1): its corners, its
+ * innermost cell, where the way out breaks through the walls, and the +1 at the end of it.
+ */
+function mazeAnchors() {
+  const t = sigilTables()[SIGIL_FULL];
+  let x0 = Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < t.x.length; i++) (x0 = Math.min(x0, t.x[i])), (y0 = Math.min(y0, t.y[i])), (y1 = Math.max(y1, t.y[i]));
+  const rx0 = Math.min(...SIGIL_MAZE.map((q) => q[0])), ry0 = Math.min(...SIGIL_MAZE.map((q) => q[1])), ry1 = Math.max(...SIGIL_MAZE.map((q) => q[1]));
+  const g = (y1 - y0) / (ry1 - ry0), cx = rx0 - x0 / g, cy = ry0 - y0 / g;
+  const M = SIGIL_MAZE.map(([x, y]): P2 => [(x - cx) * g, (y - cy) * g]);
+  const exit = sigilPlusOne() as P2;
+  const avg = (ps: P2[]): P2 => [ps.reduce((a, q) => a + q[0], 0) / ps.length, ps.reduce((a, q) => a + q[1], 0) / ps.length];
+  const n = M.length;
+  return {
+    corners: [M[1], M[2], M[3], M[4]] as P2[], // the outer turn: top-left, top-right, bottom-right, bottom-left
+    cell: avg(M.slice(n - 7, n - 2)), // the innermost turn
+    breaks: [[M[6][0], exit[1]], [M[2][0], exit[1]]] as P2[], // the way out crossing the walls
+    exit,
+  };
+}
+const sc = (p: P2, k: number): P2 => [p[0] * k, p[1] * k];
+/** the offset that makes a rotation·scale turn about c instead of the origin */
+const about = (c: P2, rot: number, s: number): P2 => [c[0] - s * (Math.cos(rot) * c[0] - Math.sin(rot) * c[1]), c[1] - s * (Math.sin(rot) * c[0] + Math.cos(rot) * c[1])];
 
-/** the letter's flame, the n-th time it comes (repeats are turned and mirrored), in its register */
+/** one flame per letter of the creature's alphabet: each its own shape, size, turn and colours */
+function buildFamilies(): Record<string, GenomeSpec> {
+  const { corners: [tl, tr, br, bl], cell, breaks, exit } = mazeAnchors();
+  const F: Record<string, GenomeSpec> = {
+    // E · the seed: the maze buds at its corners, unwinds about its innermost cell, and a small copy of
+    // it rides out along the way out to the +1
+    E: {
+      w0: 0.2,
+      xf: [
+        ...[tl, tr, br].map((c, k): XfSpec => ({ w: 0.12, rot: 0.55, s: 0.44, o: sc(c, 0.55), col: 0.25 + 0.2 * k, cs: 0.6, v: { lin: 0.66, sph: 0.1, julia: 0.14, bubble: 0.1 } })),
+        { w: 0.16, rot: 0.42, s: 0.84, o: about(cell, 0.42, 0.84), col: 0.85, cs: 0.35, v: { lin: 0.9, disc: 0.1 } },
+        { w: 0.1, rot: 0.25, s: 0.45, col: 1, cs: 0.6, v: { sph: 0.7, julia: 0.3 } },
+        { w: 0.08, s: 0.3, o: sc(exit, 0.75), col: 0.05, cs: 0.7, v: { lin: 1 } },
+      ],
+    },
+    // F · flares: copies thrown out along the way out — where it breaks the walls, and at the +1
+    F: {
+      w0: 0.1,
+      zoom: 1.6,
+      spin: 0.5,
+      hue: 0.2,
+      twist: 0.18,
+      xf: [
+        ...[breaks[0], breaks[1], exit].map((c, k): XfSpec => ({ w: 0.13, rot: 1.05, s: 0.55 - 0.05 * k, sy: 0.4, o: sc(c, 1.05), col: 0.2 + 0.25 * k, cs: 0.65, v: { lin: 0.4, hyper: 0.35, swirl: 0.25 } })),
+        { w: 0.22, rot: 0.28, s: 0.9, sy: 0.82, col: 0.95, cs: 0.3, v: { lin: 0.7, swirl: 0.3 } },
+        { w: 0.12, rot: -0.6, s: 0.5, col: 0.6, cs: 0.7, v: { hank: 0.4, lin: 0.3, polar: 0.3 } },
+      ],
+    },
+    // A · the aureole: bubbles at the maze's corners, a square spiral of copies turning a quarter
+    A: {
+      w0: 0.12,
+      zoom: 1.5,
+      spin: -0.4,
+      hue: 0.45,
+      bulge: 0.15,
+      xf: [
+        ...[tl, tr, bl].map((c, k): XfSpec => ({ w: 0.1, rot: 0.2, s: 0.5, o: sc(c, 0.7), col: 0.3 + 0.2 * k, cs: 0.6, v: { bubble: 0.6, sph: 0.25, lin: 0.15 } })),
+        { w: 0.2, rot: Math.PI / 2 + 0.08, s: 0.95, col: 0.9, cs: 0.25, v: { lin: 0.85, bubble: 0.15 } },
+        { w: 0.16, rot: 0.1, s: 0.7, col: 0.15, cs: 0.6, v: { sph: 0.55, eyefish: 0.45 } },
+      ],
+    },
+    // C · the cyclone: the maze's spiral unwound into two arms about its innermost cell, the +1 at the
+    // tip of one, its mirror at the other
+    C: {
+      w0: 0.07,
+      zoom: 1.85,
+      spin: -0.6,
+      hue: 0.65,
+      twist: 0.25,
+      xf: [
+        { w: 0.62, rot: 0.27, s: 0.94, o: about(cell, 0.27, 0.94), col: 0.9, cs: 0.15, v: { lin: 1 } },
+        { w: 0.2, s: 0.22, o: sc(exit, 0.92), col: 0.3, cs: 0.7, v: { lin: 0.7, julia: 0.3 } },
+        { w: 0.11, rot: Math.PI, s: 0.3, o: sc(exit, -0.92), col: 0.55, cs: 0.7, v: { lin: 1 } },
+      ],
+    },
+    // D · Droste: the maze inside itself, a quarter turn smaller each time, small and dense
+    D: {
+      w0: 0.12,
+      zoom: 0.68,
+      spin: 1.0,
+      hue: 0.85,
+      xf: [
+        { w: 0.45, rot: Math.PI / 2, s: 0.66, o: about(cell, Math.PI / 2, 0.66), col: 0.9, cs: 0.3, v: { disc: 0.3, lin: 0.7 } },
+        ...[tl, br, bl].map((c, k): XfSpec => ({ w: 0.08, rot: -0.4, s: 0.28, o: sc(c, 0.75), col: 0.35 + 0.15 * k, cs: 0.6, v: { lin: 1 } })),
+        { w: 0.1, rot: Math.PI, s: 0.62, col: 0.1, cs: 0.5, v: { sph: 0.6, heart: 0.4 } },
+      ],
+    },
+    // B · lace: Julia threads from three corners, fine and wide
+    B: {
+      w0: 0.1,
+      zoom: 1.3,
+      spin: 0.8,
+      hue: 0.3,
+      mir: 0.5,
+      xf: [
+        ...[tl, tr, br].map((c, k): XfSpec => ({ w: 0.12, rot: 0.9, s: 0.7, o: sc(c, 0.5), col: 0.25 + 0.25 * k, cs: 0.6, v: { julia: 0.75, lin: 0.25 } })),
+        { w: 0.2, rot: 0.15, s: 0.88, col: 0.85, cs: 0.3, v: { lin: 0.8, ex: 0.2 } },
+        { w: 0.12, rot: -0.3, s: 0.55, col: 0.05, cs: 0.6, v: { hank: 0.5, sin: 0.5 } },
+      ],
+    },
+  };
+  F.G = F.E; // (the lead has no G in 1A–1B; the letter that isn't hex falls back to the seed)
+  return F;
+}
+let FAMILY: Record<string, GenomeSpec> | null = null;
+const families = () => (FAMILY ??= buildFamilies());
+
+
+/** the letter's flame, the n-th time it comes (repeats come back a quarter turn on, mirrored), in its register */
 function letterGenome(letter: string, n: number, midi: number): Float32Array {
-  const g = genome(FAMILY[letter] ?? FAMILY.E);
-  const turn = ((n % 3) * 2 * Math.PI) / 3 + (n % 2) * 0.35;
+  const fam = families();
+  const g = genome(fam[letter] ?? fam.E);
+  const turn = ((n % 4) * Math.PI) / 2 + (n % 2) * 0.2;
   const flip = n % 2 ? -1 : 1;
   const reach = 1 + 0.1 * ((midi - 72) / 5); // higher notes reach further out
   for (let j = 0; j < NXF; j++) {
@@ -231,12 +272,14 @@ export function createErasure(g: Gfx): Scene {
   let W = 1; // weight of this frame's splats (see the decay below)
   let seed = 1;
   let warmed = false;
+  let mazeC: ReturnType<typeof mazeAnchors> | null = null;
+  const maze = () => (mazeC ??= mazeAnchors());
   const X = new Float32Array(7 * 6 * 4);
   const CP = new Float32Array(7);
   const G = new Float32Array(GL);
   const PAL = new Float32Array(18);
-  // dev: hold one letter's flame (`__s13.pin = 'C'`), edit FAMILY live
-  const dev = { pin: '' as string, FAMILY };
+  // dev: hold one letter's flame (`__s13.pin = 'C'`), edit the families live (`__s13.families()`)
+  const dev = { pin: '' as string, families };
   if (import.meta.env.DEV) (globalThis as unknown as { __s13: typeof dev }).__s13 = dev;
 
   // ---- music → the score of the flame (memoised per render)
@@ -299,6 +342,7 @@ export function createErasure(g: Gfx): Scene {
 
   /** genome → uniforms (X, CP); `cx`: the collapse (0..1) pulls every transform in; `efface`: the sigil wanes */
   const upload = (gn: Float32Array, cx: number, efface: number) => {
+    const lin = smoothstep(0.55, 1, cx);
     X.fill(0);
     // 0: the sigil
     X[4 * 1 + 2] = 0; // colour 0
@@ -309,7 +353,14 @@ export function createErasure(g: Gfx): Scene {
       const rot = gn[o + 1] + 2.5 * cx * cx, sx = gn[o + 2] * (1 - 0.3 * cx), sy = gn[o + 3] * (1 - 0.3 * cx), sk = gn[o + 4];
       const c = Math.cos(rot), s = Math.sin(rot);
       X.set([c * sx, c * sk - s * sy, s * sx, s * sk + c * sy, gn[o + 5], gn[o + 6], gn[o + 7], gn[o + 8]], k);
-      for (let v = 0; v < 16; v++) X[k + 8 + v] = gn[o + 9 + v];
+      // the crush straightens every transform into a plain contraction about the +1 (the variations bend
+      // round the origin and would fling walkers out of a point): the attractor really becomes the point
+      let bent = 0;
+      for (let v = 1; v < 16; v++) {
+        X[k + 8 + v] = gn[o + 9 + v] * (1 - lin);
+        bent += gn[o + 9 + v] * lin;
+      }
+      X[k + 8] = gn[o + 9] + bent;
       w.push(Math.max(0, gn[o]));
     }
     const sum = w.reduce((a, b) => a + b, 0) || 1;
@@ -325,17 +376,21 @@ export function createErasure(g: Gfx): Scene {
     gl.clear(gl.COLOR_BUFFER_BIT);
   };
 
-  const step = (shrinkX: number, shrinkY: number, sym: number[], reset: boolean) => {
+  /** one chaos-game step: `shr` the collapse (about the +1), `star` P(a condensation lands on the +1), `fc` the focus */
+  const step = (shr: number, sym: number[], star: number, fc: P2, reset: boolean) => {
     if (!iter.use()) return;
     bindTarget(g, state.write);
+    const exit = maze().exit;
     iter
       .tex('st', state.read.tex[0], 0)
       .tex('sig', sigTex, 1)
       .set('sigN', sigN)
       .set('X', X)
       .set('CP', CP)
-      .set('shrink', shrinkX, shrinkY, 0, 0)
+      .set('shrink', shr, shr, 0, 0)
       .set('sym', sym[0], sym[1], sym[2], 0)
+      .set('plus', exit[0], exit[1], star, 0.012)
+      .set('symC', fc[0], fc[1])
       .set('seed', (seed = (seed * 1664525 + 1013904223) >>> 0))
       .set('reset', reset ? 1 : 0);
     fullscreen(g);
@@ -440,10 +495,17 @@ export function createErasure(g: Gfx): Scene {
       const flare = t >= TA ? (1 - Math.exp(-(t - TA) / 0.06)) * Math.exp(-(t - TA) / 0.45) : 0;
       const S = base * zoomL * breath * (1 + 1.1 * flare) * (1 - 0.16 * thump) * (1 + 0.18 * blowOut) * (1 + 1.8 * diveK) * (1 - 0.55 * fold) * (1 - crush) ** 2.2;
       const psi = gn[2] + 0.06 * (t - TA) + 0.55 * hitsUp * (1 - 0.6 * crush) + snareJ - 1.1 * diveK + 2.4 * cx * cx;
-      // the dive goes through the inner circle of the sigil — the "+1" — into the flame's own core
-      const dv = [0, 0.1 * diveK];
+      // what the camera centres on: the maze as S12 lands it; the dive goes into its innermost cell; the
+      // heartbeat draws the view along the way out and the unison crushes everything into the +1 — at
+      // the centre of the screen, where S14's light point is
+      const mz = maze();
+      const toExit = easeOut(Math.max(0.6 * fold, crush));
+      const focus: P2 = [mz.cell[0] * diveK, mz.cell[1] * diveK];
+      focus[0] += (mz.exit[0] - focus[0]) * toExit;
+      focus[1] += (mz.exit[1] - focus[1]) * toExit;
+      // the +1 lights up as the flame grows — a star at the end of the way out, and in every image of it
+      const star = (0.025 * Math.min(1, grow) + 0.06 * fold) * (1 - crush) + 0.4 * crush;
       const cs = Math.cos(psi), sn = Math.sin(psi);
-      const off = [-(cs * dv[0] - sn * dv[1]) * S, -(sn * dv[0] + cs * dv[1]) * S];
       const twist = gn[4] + 0.9 * diveK + 1.2 * fold - 0.5 * crush;
       const bulge = gn[5] - 0.25 * diveK;
 
@@ -463,7 +525,7 @@ export function createErasure(g: Gfx): Scene {
       const shr = 1 - cx;
       if (reset) {
         resetWalkers();
-        for (let i = 0; i < BURN + 2; i++) step(shr, shr, sym, i === 0);
+        for (let i = 0; i < BURN + 2; i++) step(shr, sym, star, focus, i === 0);
         bindTarget(g, hist);
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -471,7 +533,8 @@ export function createErasure(g: Gfx): Scene {
         W = 1;
       }
       const running = f.dt > 0 || reset;
-      const tau = (0.07 + 0.05 * diveK + 0.12 * fold * (1 - crush)) * TAU_K;
+      // (shorter in the crush: a few splats per frame there must not leave the old flame glowing behind)
+      const tau = (0.07 + 0.05 * diveK + 0.12 * fold * (1 - crush)) * TAU_K * (1 - 0.75 * crush);
       const decay = reset ? 0 : Math.exp(-Math.max(0, f.dt) / tau);
       const iters = reset ? 2 : running ? ITER : 0; // (a cut: a short pre-roll — S13 is entered at 1A:00 on a downbeat)
 
@@ -493,12 +556,12 @@ export function createErasure(g: Gfx): Scene {
       // A flame that shrinks to a point would pile every walker into the same few bins, and additive
       // blending into one pixel serialises (the collapse took ~60 ms a frame): a small flame plots a
       // random subset (any subset of the walkers is a sample of the same attractor), ∝ its area.
-      const nPts = Math.round(SW * SH * Math.min(1, Math.max(0.012, (S / 0.15) ** 2)));
+      const nPts = Math.round(SW * SH * Math.min(1, Math.max(0.03, (S / 0.15) ** 2)));
       // (when the flame is a few pixels wide, a few splats per bin make the same picture)
       const bands = nPts < SW * SH * 0.25 ? 1 : BANDS;
       for (let i = 0; i < iters; i++) {
         gl.disable(gl.BLEND);
-        step(shr, shr, sym, false);
+        step(shr, sym, star, focus, false);
         bindTarget(g, hist);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE);
@@ -506,7 +569,8 @@ export function createErasure(g: Gfx): Scene {
           splat
             .tex('st', state.read.tex[0], 0)
             .set('stW', SW)
-            .set('cam', S * cs, S * sn, off[0], off[1])
+            .set('cam', S * cs, S * sn, 0, 0)
+            .set('focus', focus[0], focus[1])
             .set('fin', twist, bulge, palShift, 1)
             .set('aspect', f.aspect)
             .set('burn', BURN)
@@ -538,7 +602,7 @@ export function createErasure(g: Gfx): Scene {
           .set('floor_', 0.3 / zoom)
           .set('expo', 2.2 / 3.4)
           .set('satur', 1.45 - 0.45 * crush)
-          .set('gain', (1.05 + 0.3 * kick + 0.5 * pulse(p.hits, t, 0.2) + 0.4 * roll + 1.5 * crush) * (1 - smoothstep(p.unison + 5 * ROW, p.unison + 9 * ROW, t)))
+          .set('gain', (0.85 + 0.2 * smoothstep(TA, TA + 0.4, t) + 0.3 * kick + 0.5 * pulse(p.hits, t, 0.2) + 0.4 * roll + 1.5 * crush) * (1 - smoothstep(p.unison + 5 * ROW, p.unison + 9 * ROW, t)))
           .set('dotP', (2.5 * hdr!.h) / 945, 4 * dotK)
           // the unison: the light leaves as a ring while the flame falls in
           .set('ring', (Math.max(0, t - p.unison) / 0.5) ** 0.6 * hdr!.h * 0.9, t > p.unison ? 2.2 * Math.exp(-(t - p.unison) / 0.3) : 0);

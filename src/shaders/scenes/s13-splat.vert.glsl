@@ -1,10 +1,11 @@
 // S13 · one point per walker into the flame histogram (pulled from the state texture by gl_VertexID).
 // flam3's "final transform" lives here: plotted, never iterated — a twist and a radial bulge of the
-// whole flame, then the camera (rotation·scale + offset in H units).
+// whole flame about the camera's focus, then the camera (rotation·scale about the focus, + offset in H).
 uniform sampler2D st;
 uniform int stW;
 uniform vec4 cam;      // rotation·scale (cos·S, sin·S) in H units, centre offset (H)
 uniform vec4 fin;      // final transform: twist (rad per unit²), bulge exponent, colour shift, colour gain
+uniform vec2 focus;    // the point of the flame (table units) at the centre of the screen
 uniform float aspect;
 uniform float burn;    // steps a walker needs before it is on the attractor
 uniform vec3 PAL[6];   // palette, linear: [0] = the sigil's own colour
@@ -22,7 +23,7 @@ vec3 palette(float x) {
 
 void main() {
   vec4 s = texelFetch(st, ivec2(gl_VertexID % stW, gl_VertexID / stW), 0);
-  vec2 w = s.xy;
+  vec2 w = s.xy - focus;
   float r2 = dot(w, w);
   if (fin.x != 0.0) { float a = fin.x * r2; w = mat2(cos(a), sin(a), -sin(a), cos(a)) * w; }
   if (fin.y != 0.0) w *= pow(r2 + 1e-6, 0.5 * fin.y);

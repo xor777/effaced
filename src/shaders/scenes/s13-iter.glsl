@@ -1,6 +1,8 @@
 // S13 · Erasure — one chaos-game step per walker (fractal flame, Draves & Reckase).
-// Transform 0 is the condensation map: it drops the walker anywhere on the creature's sigil, so the
-// attractor is "the sigil ∪ all its images" — the flame grows out of the sigil (IFS with condensation).
+// Transform 0 is the condensation map: it drops the walker anywhere on the creature's sigil — the maze
+// and its way out — or, now and then, right on its "+1" (the end of the way out), so the attractor is
+// "the sigil ∪ all its images" — the flame grows out of the maze (IFS with condensation), and every
+// image of the +1 is a star.
 // Transforms 1..6: affine + a blend of 16 flam3 variations. After every step an n-fold rotation (and a
 // mirror) with probabilities sym.y / sym.z: flam3's symmetry transforms, n = 3 → 5 → 17 → 257.
 #include "lib/common"
@@ -14,8 +16,10 @@ uniform int sigN;
 //   [spiral hyperbolic heart polar] [handkerchief ex eyefish cylinder]
 uniform vec4 X[42];
 uniform float CP[7];    // cumulative probabilities
-uniform vec4 shrink;    // x: condensation scale (the sigil itself), y: translation scale (collapse)
+uniform vec4 shrink;    // x: condensation scale (the sigil itself), y: translation scale (collapse), both about the +1
 uniform vec4 sym;       // n, P(rotate), P(mirror), sigil phase (turns)
+uniform vec4 plus;      // the +1: xy (table units), P(a condensation lands on it), jitter radius
+uniform vec2 symC;      // centre of the symmetry (the camera's focus: the rosette is centred on screen)
 uniform uint seed;
 uniform int reset;
 
@@ -43,9 +47,16 @@ void main() {
   vec4 A = X[b], B = X[b + 1], V0 = X[b + 2], V1 = X[b + 3], V2 = X[b + 4], V3 = X[b + 5];
   vec2 p;
   if (k == 0) {
-    p = sigil(rnd(h) + sym.w) * shrink.x;
+    // (the collapse pulls everything into the +1: it is the pivot of both shrinks)
+    if (rnd(h) < plus.z) {
+      float a = TAU * rnd(h), rr = plus.w * sqrt(rnd(h));
+      p = plus.xy + rr * shrink.x * vec2(cos(a), sin(a));
+    } else {
+      p = plus.xy + (sigil(rnd(h) + sym.w) - plus.xy) * shrink.x;
+    }
   } else {
-    vec2 q = vec2(A.x * s.x + A.y * s.y, A.z * s.x + A.w * s.y) + B.xy * shrink.y;
+    vec2 AP = vec2(A.x * plus.x + A.y * plus.y, A.z * plus.x + A.w * plus.y);
+    vec2 q = vec2(A.x * s.x + A.y * s.y, A.z * s.x + A.w * s.y) + B.xy * shrink.y + (1.0 - shrink.y) * (plus.xy - AP);
     float r2 = dot(q, q) + 1e-9, rr = sqrt(r2);
     float th = atan(q.x, q.y); // flam3's theta
     p = V0.x * q;
@@ -71,8 +82,8 @@ void main() {
   // symmetry: an n-fold rotation, a mirror
   if (rnd(h) < sym.y) {
     float a = TAU * floor(rnd(h) * sym.x) / sym.x;
-    p = mat2(cos(a), sin(a), -sin(a), cos(a)) * p;
+    p = symC + mat2(cos(a), sin(a), -sin(a), cos(a)) * (p - symC);
   }
-  if (rnd(h) < sym.z) p.x = -p.x;
+  if (rnd(h) < sym.z) p.x = 2.0 * symC.x - p.x;
   o = vec4(p, mix(s.z, B.z, B.w), s.w + 1.0);
 }
