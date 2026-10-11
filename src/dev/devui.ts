@@ -1,8 +1,10 @@
 // Dev overlay (PLAN §11.5): seek bar with the running order, loop region, transport keys,
 // pos:row readout, frame timing. URL: ?scene=S08 (solo) · ?pos=0F&row=0 · ?t=12.5 · ?go (skip setup)
 //
+// Off by default, so a viewer just watches the show: ` (the key left of 1; ё / § on other layouts)
+// switches it on and off. Only while it is on do the transport keys and the bar work:
 // keys: Space play/pause · ←/→ ±1 bar (shift: ±1 pattern) · Home start · L loop current cue
-//       S solo current scene · M mute · H hide · [ / ] playback rate · R reset to cue start
+//       S solo current scene · M mute · [ / ] playback rate · R reset to cue start
 
 import type { Demo } from '../demo.ts';
 import type { FrameCtx } from '../scenes/types.ts';
@@ -17,6 +19,16 @@ export function devUI(demo: Demo) {
   root.id = 'dev';
   root.innerHTML = `<div class="bar"></div><div class="info"></div>`;
   document.body.appendChild(root);
+  // on/off survives a reload of this tab (and only then does a reload resume where it was)
+  let on = devWasOn();
+  const show = (v: boolean) => {
+    on = v;
+    root.classList.toggle('hidden', !on);
+    try {
+      sessionStorage.setItem('effaced.dev', on ? '1' : '0');
+    } catch {}
+  };
+  show(on);
   const bar = root.querySelector('.bar') as HTMLElement;
   const info = root.querySelector('.info') as HTMLElement;
 
@@ -58,6 +70,7 @@ export function devUI(demo: Demo) {
     lastPerf = now;
     fps = fps * 0.95 + (1000 / Math.max(1, dtp)) * 0.05;
     frameMs = frameMs * 0.9 + ms * 0.1;
+    if (!on) return;
     head.style.left = `${(f.t / DURATION) * 100}%`;
     if (clock.loop) {
       loopEl.style.display = 'block';
@@ -81,6 +94,12 @@ export function devUI(demo: Demo) {
 
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return;
+    if (e.code === 'Backquote' || e.code === 'IntlBackslash' || ['`', '~', 'ё', 'Ё', '§', '±'].includes(e.key)) {
+      show(!on);
+      e.preventDefault();
+      return;
+    }
+    if (!on) return; // the show is untouchable until the overlay is switched on
     const t = clock.time();
     const bar16 = ROW * 16, pat = ROW * ROWS;
     const ci = cueAt(t);
@@ -113,10 +132,6 @@ export function devUI(demo: Demo) {
       case 'M':
         clock.setVolume(clock.gain && clock.gain.gain.value > 0 ? 0 : 1);
         break;
-      case 'h':
-      case 'H':
-        root.classList.toggle('hidden');
-        break;
       case '[':
         clock.rate = Math.max(0.25, clock.rate / 2);
         clock.seek(t);
@@ -145,7 +160,15 @@ export function startTimeFromUrl(): { t: number; solo: string | null } {
   if (q.has('t')) return { t: +q.get('t')!, solo: null };
   try {
     const s = sessionStorage.getItem('effaced.t');
-    if (s) return { t: +s, solo: null };
+    if (s && devWasOn()) return { t: +s, solo: null };
   } catch {}
   return { t: 0, solo: null };
+}
+
+function devWasOn(): boolean {
+  try {
+    return sessionStorage.getItem('effaced.dev') === '1';
+  } catch {
+    return false;
+  }
 }

@@ -21,10 +21,11 @@ pnpm build               # static build in dist/
 
 `?go` skip the start prompt · `?scene=S08` start at a scene (`&solo` to pin it) · `?pos=0F&row=8` · `?t=12.5` ·
 `&silent` no music render (picture only) · `?bench[=WxH][&only=S09,S12]` per-scene frame-time sweep (nothing plays).
-The last position is remembered per tab, so a reload resumes where you were.
+The dev overlay is off by default: `` ` `` (the key left of 1; ё / § on other layouts) switches it on and off,
+and only while it is on do the keys and the seek bar work. With it on, a reload resumes where you were.
 
 Space play/pause · ←/→ ±1 bar (Shift ±1 pattern) · Home · R restart cue · L loop cue · S solo scene ·
-M mute · H hide bar · `[` `]` playback rate. Click/drag the bar to seek (Alt = no bar snapping).
+M mute · `[` `]` playback rate. Click/drag the bar to seek (Alt = no bar snapping).
 Editing a `.glsl` file hot-reloads the shaders without touching the clock.
 
 ## Layout
