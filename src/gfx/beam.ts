@@ -6,6 +6,7 @@
 import { type Gfx, type Target, program, PingPong, bindTarget, fullscreen, clearTarget } from './gl.ts';
 
 const MAX_SEG = 32768;
+const BLANK = 1e4; // a pen-up sample (the splat shader drops both segments touching it)
 
 export interface BeamStyle {
   /** beam radius in output pixels at 1080p */
@@ -71,6 +72,11 @@ export class Beam {
     this.pts[this.n * 2] = x;
     this.pts[this.n * 2 + 1] = y;
     this.n++;
+  }
+
+  /** lift the pen: the beam jumps to the next point without drawing (S00 never does: a scope cannot) */
+  blank() {
+    this.push(BLANK, 0);
   }
 
   /** decay the phosphor by dt, splat the collected polyline, then draw the glow into `out` */

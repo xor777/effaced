@@ -17,8 +17,10 @@
 //             the A and FACE stands alone while the rules burn (1D:56) — then F 1E:04, A 1E:16, C 1E:28, E 1E:40
 //             (the choir). Each letter flares, crumbles from its far side, and its embers arc into the point
 //             with streaks; the letters left flinch and flare. 1E:52: the bell alone, the point.
-// S15 (1F:00 + tail): the oscilloscope beam of S00 grows the creature's sigil out of the point through the final
-//   cadence (whole at the A major, 1F:32) and collapses back into it (1F:44–1F:60). The point lingers as the
+// S15 (1F:00 + tail): the oscilloscope beam of S00 grows the creature's sigil out of the point (1F:00–1F:20); then
+//   the sigil moves left and EFFACED, written in the sigil's own hand by the same beam, comes out of the point to
+//   its right — the lockup whole at the A major (1F:32), held through the cadence. After it the word goes back into
+//   the point, the point back to the centre, the maze collapses into it (1F:64–1F:86). The point lingers as the
 //   last light; "65536 + 1"; the point goes out with the music's tail. Darkness. The title becomes #FACE.
 //
 // Exact colours, no post (the hand-offs are pixel-exact): the word pass encodes itself.
@@ -36,7 +38,7 @@ import { toBuffer, hex2rgb, encode3, type Vec3 } from '../perception/color.ts';
 const P1C = 0x1c * ROWS;
 const S14_ROWS = 3 * ROWS;
 const S15_SEC = ROWS * ROW + 12; // 1F + the 12 s tail (script.ts TAIL)
-const SR = 48000; // beam samples per second (as S00 at the audio rate)
+const SR = 288000; // beam samples per second (S00 runs at the audio rate, 48 kHz; the letters want finer steps)
 const TABLE = 4096;
 const N_EMBERS = 256 * 256;
 
@@ -66,21 +68,39 @@ export const CAMERA = {
 
 export const TIMING = { CAP, RANK, LAND, LIGHT, ERASE, RULES_BURN, STEP, CLOSE };
 
-/** the beam through 1F (seconds since the cut) */
+/** the beam through 1F (rows since the cut) */
 export const BEAM = {
-  growTo: 32 * ROW, // whole at the A major (1F:32)
-  collapseFrom: 44 * ROW,
-  collapseTo: 60 * ROW, // the harp's last C♯
-  fE: 82.407, // the traversal follows the bass: E2, then A2
-  fA: 110,
+  grow: [0, 20], // the maze out of the point
+  slide: [14, 32], // the maze moves left, the word comes out of the point: the lockup whole at the A major (1F:32)
+  retract: [64, 78], // the word back into the point, the point back to the centre
+  collapse: [70, 86], // the maze into the point
+  toA: 32, // the traversal follows the bass (an octave up): E3, then A3
+  fE: 164.81,
+  fA: 220,
+  tau: 0.035, // a short phosphor (S00's is 0.12 s): the moving lockup smears a little, not into slabs
   exposure: 1.6,
   energy: 1,
 };
-/** the maze sigil around its +1: scale on screen, and its farthest reach from the +1 in table units */
-const SIGIL_FIT = 0.6, SIGIL_REACH = 2.3;
+/** the lockup, beam units (±1 = 82 % of the half height): the maze's scale alone and in the lockup, the cap height
+ * of the word, and in caps: the +1 to the E, where the letters come out of the point, the space between letters */
+export const LOCKUP = { fitBig: 0.6, fit: 0.37, cap: 0.27, gap: 0.6, slot: 0.2, track: 0.42 };
+/** the maze's farthest reach from its +1 (table units) */
+const SIGIL_REACH = 2.3;
+/** EFFACED in the maze's hand: square monoline letters (caps: x 0..LW, y −0.5..0.5; the bars on the line of the way
+ * out), each a list of strokes the beam draws pen-down; the D's corners are cut so it is not an O */
+const LW = 0.72, CUT = 0.2;
+type Stroke = [number, number][];
+const SQUARE: Record<string, Stroke[]> = {
+  E: [[[LW, 0.5], [0, 0.5], [0, -0.5], [LW, -0.5]], [[0, 0], [0.8 * LW, 0]]],
+  F: [[[LW, 0.5], [0, 0.5], [0, -0.5]], [[0, 0], [0.8 * LW, 0]]],
+  A: [[[0, -0.5], [0, 0.5], [LW, 0.5], [LW, -0.5]], [[0, 0], [LW, 0]]],
+  C: [[[LW, 0.5], [0, 0.5], [0, -0.5], [LW, -0.5]]],
+  D: [[[0, -0.5], [0, 0.5], [LW - CUT, 0.5], [LW, 0.5 - CUT], [LW, CUT - 0.5], [LW - CUT, -0.5], [0, -0.5]]],
+};
+const LETTERS = [...'EFFACED'].map((ch) => SQUARE[ch]);
 /** the point: rest glow once it holds the embers, its fade with the music's tail (6 s hold, 6 s fade) */
 const POINT = { gathered: 0.08, outFrom: S15_SEC - 6, outTo: S15_SEC - 0.3 };
-const TEXT = { at: 9.5, out: 15, fade: 2, text: '65536 + 1', gray: 0.42, sizePx: 12, below: 0.075 };
+const TEXT = { at: 11.4, out: 16, fade: 2, text: '65536 + 1', gray: 0.42, sizePx: 12, below: 0.075 };
 
 const ss = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -109,6 +129,7 @@ export function createPortraitPair(g: Gfx): [Scene, Scene] {
   const word = program(g, 'scenes/s14-word');
   const embers = program(g, 'scenes/s14-embers', 'scenes/s14-embers.vert');
   const beam = new Beam(g);
+  beam.style = { ...beam.style, tau: BEAM.tau };
   let table: WebGLTexture | null = null;
   let beamT: Target | null = null;
   let text: HTMLElement | null = null;
@@ -197,45 +218,144 @@ export function createPortraitPair(g: Gfx): [Scene, Scene] {
     return { phase, ruler, halo, arrive };
   };
 
-  // ---- the beam (S15): the sigil — the maze and its way out — centred on its "+1" (the end of the way
-  // out), so it grows out of the light point and collapses back into it
+  // ---- the beam (S15): the sigil — the maze and its way out — centred on its "+1" (the end of the way out), so
+  // it grows out of the light point and collapses back into it; and the word, which comes out of the same point
   const tabs = sigilTables();
   const [cx, cy] = sigilPlusOne();
-  const sizeAt = (tc: number) => ss(0, BEAM.growTo, tc) * (1 - ss(BEAM.collapseFrom, BEAM.collapseTo, tc));
-  const xy = (tc: number): [number, number] => {
-    const grow = ss(0, BEAM.growTo, tc), coll = ss(BEAM.collapseFrom, BEAM.collapseTo, tc);
-    const size = grow * (1 - coll);
+  // the length of the maze's loop (table units): the beam's time is shared between the maze and the word by length;
+  // and how far the maze reaches left of its +1 (its width in the lockup)
+  const fullT = tabs[SIGIL_FULL];
+  let mazeLen = 0, mazeW = 0;
+  for (let i = 0; i < TABLE; i++) {
+    const j = (i + 1) % TABLE;
+    mazeLen += Math.hypot(fullT.x[j] - fullT.x[i], fullT.y[j] - fullT.y[i]);
+    mazeW = Math.max(mazeW, cx - fullT.x[i]);
+  }
+  // the lockup's motion at a time: the +1's x, the maze's scale (with its growth), its turn, the E's left edge
+  type Motion = { px: number; fitL: number; fit: number; size: number; rot: number; wx: number; show: number };
+  const m0: Motion = { px: 0, fitL: 0, fit: 0, size: 0, rot: 0, wx: 0, show: 0 }, m1: Motion = { ...m0 };
+  const wordW = () => LETTERS.length * LW + (LETTERS.length - 1) * LOCKUP.track; // caps
+  const motion = (tc: number, m: Motion) => {
+    const r = tc / ROW, B = BEAM, L = LOCKUP, ww = wordW();
+    const grow = ss(B.grow[0], B.grow[1], r), coll = ss(B.collapse[0], B.collapse[1], r);
+    const slide = ss(B.slide[0], B.slide[1], r), back = ss(B.retract[0], B.retract[1], r);
+    const total = mazeW * L.fit + (L.gap + ww) * L.cap; // the maze (its +1 at its right edge), the gap, the word
+    m.px = (mazeW * L.fit - total / 2) * slide * (1 - back);
+    m.size = grow * (1 - coll);
+    m.fitL = L.fitBig + (L.fit - L.fitBig) * slide;
+    m.fit = m.fitL * m.size;
+    m.rot = 0.9 * (1 - grow) ** 2 - 1.4 * coll * coll; // unwinding as it grows, winding up as it collapses
+    // the word slides out of the point (the D first) and back into it
+    m.show = Math.min(ss(B.slide[0] + 2, B.slide[1], r), 1 - back);
+    m.wx = m.px + (L.gap - (1 - m.show) * (L.gap + ww)) * L.cap;
+    return m;
+  };
+  // the visible word this frame, relative to the E's left edge: segments (beam units) with arc starts and stroke ids;
+  // what is still behind the point is not drawn
+  const seg: number[] = []; // ax, ay, bx, by, s0, id
+  let wordLen = 0;
+  const geo = { px: 0, j: 2, fj: 0, a: 1, box: [0, 0, 0, 0] };
+  const geometry = (m: Motion) => {
+    const L = LOCKUP, cap = L.cap;
     // the maze resolving as it grows (Fourier levels 2 → SIGIL_FULL: square from the start, never a circle)
-    const lv = 2 + (SIGIL_FULL - 2) * Math.pow(size, 0.6);
-    const j = Math.min(SIGIL_FULL - 1, Math.floor(lv)), fj = lv - j;
-    const ph = tc < BEAM.growTo ? BEAM.fE * tc : BEAM.fE * BEAM.growTo + BEAM.fA * (tc - BEAM.growTo);
-    const u = (ph - Math.floor(ph)) * TABLE;
-    const k = Math.floor(u), fk = u - k;
-    const at = (t: { x: Float32Array; y: Float32Array }, c: 'x' | 'y') => t[c][k] + (t[c][k + 1] - t[c][k]) * fk;
-    const x = at(tabs[j], 'x') + (at(tabs[j + 1], 'x') - at(tabs[j], 'x')) * fj - cx;
-    const y = at(tabs[j], 'y') + (at(tabs[j + 1], 'y') - at(tabs[j], 'y')) * fj - cy;
-    const rot = 0.9 * (1 - grow) ** 2 - 1.4 * coll * coll; // unwinding as it grows, winding up as it collapses
-    const c = Math.cos(rot), s = Math.sin(rot);
-    // the maze reaches ~2.2 table units from its +1 (the old circle reached 1): scale it to sit in frame
-    const fit = size * SIGIL_FIT;
-    return [fit * (c * x - s * y), fit * (s * x + c * y)];
+    const lv = 2 + (SIGIL_FULL - 2) * Math.pow(m.size, 0.6);
+    geo.j = Math.min(SIGIL_FULL - 1, Math.floor(lv));
+    geo.fj = lv - geo.j;
+    geo.px = m.px;
+    const clip = m.px + L.slot * cap - m.wx;
+    seg.length = 0;
+    wordLen = 0;
+    let id = 0, right = clip;
+    if (m.show > 0) {
+      LETTERS.forEach((strokes, k) => {
+        const lx = k * (LW + L.track) * cap;
+        for (const st of strokes) {
+          id++;
+          for (let i = 0; i + 1 < st.length; i++) {
+            let ax = lx + st[i][0] * cap, bx = lx + st[i + 1][0] * cap;
+            let ay = st[i][1] * cap, by = st[i + 1][1] * cap;
+            if (ax < clip && bx < clip) continue;
+            // cut at the point: a stroke behind it comes out of it as a new pen-down
+            if (ax < clip || bx < clip) {
+              const u = (clip - ax) / (bx - ax), y = ay + (by - ay) * u;
+              if (ax < clip) { ax = clip; ay = y; id++; } else { bx = clip; by = y; }
+            }
+            const len = Math.hypot(bx - ax, by - ay);
+            if (len < 1e-6) continue;
+            seg.push(ax, ay, bx, by, wordLen, id);
+            wordLen += len;
+            right = Math.max(right, ax, bx);
+          }
+        }
+      });
+    }
+    // the maze's share of the beam's time: by length, the word counted twice (the maze's loop goes out and back)
+    const ml = mazeLen * m.fit;
+    geo.a = wordLen > 0 ? ml / (ml + 2 * wordLen) : 1;
+    // where the beam can be (frame heights, from the centre): the maze around its +1, and the word
+    const reach = SIGIL_REACH * Math.max(m0.fit, m.fit), x1 = wordLen > 0 ? m.wx + right : m.px;
+    const lo = Math.min(Math.min(m0.px, m.px) - reach, m.wx + clip), hi = Math.max(m.px + reach, x1);
+    const hy = Math.max(reach, 0.5 * cap), H = 0.41; // beam units → frame heights (0.82 of the half height)
+    geo.box = [0.5 * (lo + hi) * H, 0, 0.5 * (hi - lo) * H + 0.04, hy * H + 0.04];
+  };
+  const phaseAt = (t: number) => {
+    const toA = BEAM.toA * ROW;
+    return t < toA ? BEAM.fE * t : BEAM.fE * toA + BEAM.fA * (t - toA);
   };
   const drawBeam = (f: FrameCtx, tc: number, warm: boolean): Target | null => {
-    if (!warm && (tc > BEAM.collapseTo + 1.5 || tc < 0)) return null;
+    if (!warm && (tc > BEAM.collapse[1] * ROW + 1.5 || tc < 0)) return null;
     beamT = ensureTarget(g, beamT, Math.ceil(f.w / 2), Math.ceil(f.h / 2), { formats: [gl.RGBA16F], filter: gl.LINEAR });
     clearTarget(g, beamT);
     const reset = f.jumped || tc < lastTc || warm;
     let n0 = Math.floor((reset ? Math.max(0, tc - 1 / 60) : lastTc) * SR);
     const n1 = Math.floor(tc * SR);
-    if (n1 - n0 > 32000) n0 = n1 - 32000;
+    if (n1 - n0 > 30000) n0 = n1 - 30000; // (room for the pen-ups in the beam's 32768)
+    if (n1 <= n0) n0 = Math.max(0, n1 - Math.round(SR / 60)); // paused: the last frame's stretch again (the figure holds)
+    // the motion runs per sample (from the frame's start to its end), so a moving figure smears and does not step
+    const tA = n0 / SR;
+    motion(tA, m0);
+    motion(tc, m1);
+    geometry(m1);
+    const G = geo, t0 = tabs[G.j], t1 = tabs[G.j + 1], span = Math.max(1, n1 - n0);
     beam.begin();
-    for (let i = n0; i <= n1; i++) beam.push(...xy(i / SR));
-    if (beam.n < 2) beam.push(0, 0);
+    let prev = -2;
+    for (let i = n0; i <= n1; i++) {
+      const ph = phaseAt(i / SR), u = ph - Math.floor(ph), w = (i - n0) / span;
+      const px = m0.px + (m1.px - m0.px) * w;
+      let id = -1, x: number, y: number;
+      if (u < G.a) {
+        const fit = m0.fit + (m1.fit - m0.fit) * w, rot = m0.rot + (m1.rot - m0.rot) * w;
+        const c = Math.cos(rot), sn = Math.sin(rot);
+        const v = (u / G.a) * TABLE, k = Math.floor(v) % TABLE, fk = v - Math.floor(v), k1 = (k + 1) % TABLE;
+        const mx = t0.x[k] + (t0.x[k1] - t0.x[k]) * fk, my = t0.y[k] + (t0.y[k1] - t0.y[k]) * fk;
+        const nx = t1.x[k] + (t1.x[k1] - t1.x[k]) * fk, ny = t1.y[k] + (t1.y[k1] - t1.y[k]) * fk;
+        const ex = mx + (nx - mx) * G.fj - cx, ey = my + (ny - my) * G.fj - cy;
+        x = px + fit * (c * ex - sn * ey);
+        y = fit * (sn * ex + c * ey);
+      } else {
+        const s = ((u - G.a) / (1 - G.a)) * wordLen, wx = m0.wx + (m1.wx - m0.wx) * w;
+        let q = 0;
+        while (q + 6 < seg.length && seg[q + 6 + 4] <= s) q += 6;
+        const len = Math.hypot(seg[q + 2] - seg[q], seg[q + 3] - seg[q + 1]), f = Math.min(1, (s - seg[q + 4]) / len);
+        x = wx + seg[q] + (seg[q + 2] - seg[q]) * f;
+        y = seg[q + 1] + (seg[q + 3] - seg[q + 1]) * f;
+        id = seg[q + 5];
+      }
+      if (prev !== -2 && id !== prev) beam.blank();
+      beam.push(x, y);
+      prev = id;
+    }
     // the bell's G♯ (1F:16) and C♯ (1F:32) swell the trace
     const bell = env(tc, [[16 * ROW, 0.76], [32 * ROW, 0.85]], 0.25, 1.5);
-    const fadeOut = 1 - ss(BEAM.collapseTo - 0.6, BEAM.collapseTo, tc);
-    const energy = warm ? 0 : BEAM.energy * ss(0, 0.5, tc) * (0.3 + 0.7 * sizeAt(tc)) * (1 + 0.4 * bell) * fadeOut;
+    const end = BEAM.collapse[1] * ROW, fadeOut = 1 - ss(end - 0.6, end, tc);
+    // the same light per length of line as the maze alone had at its old scale (0.6), however the time is shared
+    const share = wordLen > 0 ? (m1.fit + (2 * wordLen) / mazeLen) / (0.6 * Math.max(m1.size, 0.05)) : m1.fitL / 0.6;
+    const energy = warm ? 0 : BEAM.energy * (48000 / SR) * (0.12 / BEAM.tau) * share * ss(0, 0.5, tc) * (0.3 + 0.7 * m1.size) * (1 + 0.4 * bell) * fadeOut;
     beam.render(Math.max(0, f.dt), beamT, f.aspect, reset, 0.82, energy);
+    // its mip levels are the glow's blur (s14-word)
+    gl.bindTexture(gl.TEXTURE_2D, beamT.tex[0]);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.generateMipmap(gl.TEXTURE_2D);
     return beamT;
   };
 
@@ -256,7 +376,7 @@ export function createPortraitPair(g: Gfx): [Scene, Scene] {
   // ---- the word pass (S14) / the black with the beam and the point (S15)
   const drawWord = (
     f: FrameCtx, r: number, on: boolean, st: ReturnType<typeof state>, c: ReturnType<typeof cues>,
-    x: { beam?: Target | null; halo: number; dot: number },
+    x: { beam?: Target | null; halo: number; dot: number; at?: number },
   ) => {
     bindTarget(g, null);
     if (!word.use()) return;
@@ -278,9 +398,11 @@ export function createPortraitPair(g: Gfx): [Scene, Scene] {
       .set('dotCol', COL.dot)
       .set('dotRA', (2.5 * f.h) / 945, x.dot)
       .set('halo', x.halo, (14 * f.h) / 945)
+      .set('dotP', (x.at ?? 0) * 0.41 * f.h, 0)
       .set('dither', 1)
       .tex('beamTex', x.beam?.tex[0] ?? null, 1)
-      .set('beamU', x.beam ? 1 : 0, BEAM.exposure, 0.41 * 1.15 * SIGIL_REACH * SIGIL_FIT * Math.max(sizeAt(f.local), sizeAt(f.local - 0.3)) + 0.03);
+      .set('beamU', x.beam ? 1 : 0, BEAM.exposure)
+      .set('beamBox', geo.box);
     fullscreen(g);
   };
 
@@ -310,7 +432,7 @@ export function createPortraitPair(g: Gfx): [Scene, Scene] {
   };
 
   if (import.meta.env.DEV) {
-    const hook = { TIMING, CAMERA, BEAM, COL, POINT, TEXT, word, embers };
+    const hook = { TIMING, CAMERA, BEAM, LOCKUP, COL, POINT, TEXT, word, embers };
     (globalThis as unknown as { __s14: typeof hook }).__s14 = hook;
   }
 
@@ -373,9 +495,9 @@ export function createPortraitPair(g: Gfx): [Scene, Scene] {
       const r = S14_ROWS + tc / ROW;
       camera(r);
       const st = state(r, c.kick);
-      const x = tc - BEAM.collapseTo;
+      const x = tc - BEAM.collapse[1] * ROW;
       const flare = x >= 0 ? 0.16 * Math.min(1, x / 0.15) * Math.exp(-x / 1.4) : 0;
-      drawWord(f, r, false, st, c, { beam: b, halo: (POINT.gathered + 0.05 * st.arrive + flare) * dot, dot });
+      drawWord(f, r, false, st, c, { beam: b, halo: (POINT.gathered + 0.05 * st.arrive + flare) * dot, dot, at: geo.px });
       if (text) {
         const fade = TEXT.fade;
         text.style.opacity = String(Math.min(1, Math.max(0, (tc - TEXT.at) / fade)) * (1 - Math.min(1, Math.max(0, (tc - TEXT.out) / fade))));

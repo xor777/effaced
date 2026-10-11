@@ -20,8 +20,10 @@ uniform vec3 consC;         // linear: construction hairlines
 uniform vec3 dotCol;        // linear: the point
 uniform vec2 dotRA;         // radius (device px), opacity
 uniform vec2 halo;          // the point's glow: amplitude, sigma (device px)
+uniform vec2 dotP;          // where the point is (device px from the centre): S15's lockup moves it left
 uniform sampler2D beamTex;  // S15: the beam's glow (linear, half resolution)
-uniform vec3 beamU;         // x: on, y: exposure, z: reach from the point (frame heights)
+uniform vec2 beamU;         // x: on, y: exposure
+uniform vec4 beamBox;       // where the beam can be: centre, half size (frame heights, from the frame's centre)
 uniform float dither;
 
 uint pcgW(uint v) {
@@ -133,20 +135,16 @@ void main() {
       float tip = exp(-0.5 * (along * along + dl * dl) / (0.035 * 0.035));
       col += consC * ruler.y * line + (ruler.w > 0.5 ? hotC : inkC) * ruler.z * tip * step(0.001, ruler.x);
     }
-  } else if (beamU.x > 0.5 && length(q) < beamU.z) {
+  } else if (beamU.x > 0.5 && all(lessThan(abs(q - beamBox.xy), beamBox.zw))) {
     // S15: the S00 beam returns — its phosphor glow, with a soft shoulder (no post in this scene)
-    vec2 uvb = gl_FragCoord.xy / res, tx = 2.0 / res; // one texel of the half-resolution beam
-    vec3 wide = vec3(0.0);
-    for (int i = 0; i < 8; i++) {
-      float a = float(i) * 0.7853982 + 0.39;
-      vec2 dd = vec2(cos(a), sin(a)) * tx;
-      wide += texture(beamTex, uvb + 3.0 * dd).rgb + 0.5 * texture(beamTex, uvb + 9.0 * dd).rgb;
-    }
-    vec3 b = (texture(beamTex, uvb).rgb + 0.1 * wide) * beamU.y;
+    vec2 uvb = gl_FragCoord.xy / res;
+    // the shoulder: the beam's own mip levels, a smooth blur (taps would show as copies of a thin line: the letters);
+    // faint, as the trace itself saturates (~26 in the texture) and a stronger halo would saturate into a slab
+    vec3 b = (textureLod(beamTex, uvb, 0.0).rgb + 0.012 * textureLod(beamTex, uvb, 2.5).rgb + 0.008 * textureLod(beamTex, uvb, 4.5).rgb) * beamU.y;
     col += b / (1.0 + max(max(b.r, b.g), b.b));
   }
-  // the light point (S13 collapsed into it; the +1) and its glow — the camera's anchor, always the centre
-  float r = length(gl_FragCoord.xy - 0.5 * res);
+  // the light point (S13 collapsed into it; the +1) and its glow — the camera's anchor, the centre (but in S15's lockup)
+  float r = length(gl_FragCoord.xy - 0.5 * res - dotP);
   col += halo.x * exp(-0.5 * r * r / (halo.y * halo.y)) * vec3(0.95, 0.9, 1.0);
   col = mix(col, dotCol, dotRA.y * clamp(0.5 - (r - dotRA.x), 0.0, 1.0));
   o = vec4(encodeW(col), 1.0);
