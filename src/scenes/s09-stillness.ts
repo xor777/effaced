@@ -239,11 +239,18 @@ export function createStillness(g: Gfx): Scene {
    * costs one composite pass, not a 16-sample render.
    */
   let stillKey = '';
+  /** (re)build the cached still if the size or S08's turn changed; true when it did */
+  const bakeStill = (f: FrameCtx) => {
+    const key = `${msW}x${msH}:${FLOW.turn >= 0}`;
+    if (stillKey === key) return false;
+    layout([1, 0, 0, 0], true);
+    renderStill(f);
+    stillKey = key;
+    return true;
+  };
   const drawStill = (f: FrameCtx) => {
     layout([1, 0, 0, 0], true);
-    const key = `${msW}x${msH}:${FLOW.turn >= 0}`; // (re-render when the size or S08's turn changes)
-    if (stillKey !== key) renderStill(f);
-    stillKey = key;
+    bakeStill(f);
     bindTarget(g, null);
     if (still.use()) {
       still
@@ -329,6 +336,9 @@ export function createStillness(g: Gfx): Scene {
       if (freshLow) pass(word, lowT, (p) => p.set('res', qw, qh).set('cap', LOW.cap).set('pen', LOW.pen));
 
       const frozen = f.t >= tm.freeze && f.t < tm.awake;
+      // Any frame drawn outside the freeze — the loader's warm-up renders S09 at its cue middle, alive, and
+      // warms again after a late resize — bakes the still at this size, so that 12:00 costs one composite.
+      if (!frozen && warmed) bakeStill(f);
       if (frozen || !warmed) {
         drawStill(f);
         stillDrawn = true;
