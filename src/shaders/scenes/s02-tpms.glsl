@@ -30,7 +30,7 @@ vec3 fieldGrad(vec3 p) {
   return mix(gg, gp, morph) * SCALE;
 }
 float map(vec3 p) {
-  return 0.8 * (abs(field(p)) - thick) / max(length(fieldGrad(p)), 0.4 * SCALE);
+  return 0.7 * (abs(field(p)) - thick) / max(length(fieldGrad(p)), 0.4 * SCALE);
 }
 
 vec3 normalAt(vec3 p) {
@@ -51,21 +51,21 @@ float ao(vec3 p, vec3 n) {
 void main() {
   vec2 q = (gl_FragCoord.xy - 0.5 * res) / res.y;
   vec3 rd = normalize(cam * vec3(q, 1.1));
-  // the camera flies through the lattice and crosses its walls: start beyond a near distance, step
-  // out of a wall the ray starts in, and fade surfaces close to the lens (otherwise a crossing fills
-  // a frame or two with the wall: the black/white single-frame flashes)
-  const float NEAR = 0.3;
+  // the camera flies down a wall-free channel (s02-cage.ts); still start beyond a near distance and
+  // fade surfaces close to the lens, so a wall brushing past never fills a frame
+  const float NEAR = 0.12;
   float d = NEAR, h = 1.0;
   int steps = 0;
   bool hit = false;
-  for (int i = 0; i < 110; i++) {
+  for (int i = 0; i < 130; i++) {
     h = map(ro + rd * d);
-    if (h < 0.0 && d < NEAR + 0.4) { d += max(-h, 0.02); continue; } // still inside the wall at the lens
     if (h < 0.001 * d) { hit = true; break; }
     d += h;
     steps = i;
-    if (d > 40.0) break;
+    if (d > 30.0) break;
   }
+  // a ray that ran out of steps grazing a wall is a hit, not a hole (those holes flickered as speckle)
+  if (!hit && d < 30.0 && h < 0.02 * d) hit = true;
   vec3 fogc = hex2p3(C_ACCEDE) * 0.015;
   vec3 c = fogc;
   if (hit) {
@@ -83,11 +83,16 @@ void main() {
     // seams: the surface's mid-sheet shows through the wall edges as thin glowing contour lines
     float iso = field(p);
     float lines = abs(fract(iso * 3.0 + t * 0.15) - 0.5);
-    float seam = smoothstep(0.06, 0.0, lines) * smoothstep(thick * 1.2, 0.0, abs(iso));
+    // anti-aliased by the screen-space rate of the contour; lines thinner than a pixel fade out
+    // instead of sparkling
+    float fw = fwidth(iso * 3.0);
+    float seam = smoothstep(0.06 + fw, 0.0, lines) * min(1.0, 0.06 / max(fw, 1e-4)) * smoothstep(thick * 1.2, 0.0, abs(iso));
     float cells = 0.6 + 0.4 * sin(dot(floor(p * SCALE / 6.2832), vec3(1.7, 2.3, 3.1)) + t);
     c += hex2p3(C_DECADE) * seam * glow * (0.7 + 0.6 * beat) * cells;
     c = mix(c, fogc, 1.0 - exp(-d * 0.07));
-    c = mix(fogc, c, smoothstep(NEAR, NEAR + 0.6, d));
+    // far walls are thinner than a pixel at half resolution: fade them into the fog before they sparkle
+    c = mix(c, fogc, smoothstep(8.0, 20.0, d));
+    c = mix(fogc, c, smoothstep(NEAR, NEAR + 0.35, d));
 #ifdef DEBUG_NORMALS
     c = (n * 0.5 + 0.5) * exp(-d * 0.1);
 #endif

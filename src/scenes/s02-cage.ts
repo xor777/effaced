@@ -232,8 +232,14 @@ export function createCage(g: Gfx): Scene {
         bindTarget(g, inner);
         if (tpms.use()) {
           const tt = t - 7.5;
-          const ro: [number, number, number] = [0.6 + tt * 0.9, 0.3 + Math.sin(tt * 0.4) * 0.5, tt * 1.6];
-          const fwd = norm3([0.45, 0.08 * Math.cos(tt * 0.4), 1]);
+          // fly down a channel that no wall crosses for the whole gyroid → Schwarz P morph: on the
+          // line (π/2 − 0.5, 0, z)/SCALE the gyroid field stays ≥ 0.40 and the P field ≥ 0.48, far
+          // above the wall half-thickness (≤ 0.13). The old diagonal path crossed walls, and every
+          // crossing flashed a frame or two of wall. Small sways stay well inside the channel.
+          const CH_X = (Math.PI / 2 - 0.5) / 3.2;
+          const ro: [number, number, number] = [CH_X + 0.025 * Math.sin(tt * 0.7), 0.025 * Math.sin(tt * 0.5), tt * 1.6];
+          // look across the channel at the walls streaming past (as before), not down the empty tube
+          const fwd = norm3([0.5 + 0.15 * Math.sin(tt * 0.31), 0.1 * Math.cos(tt * 0.4), 1]);
           const right = norm3(cross3([0, 1, 0], fwd));
           const up = cross3(fwd, right);
           tpms
@@ -292,7 +298,7 @@ export function createCage(g: Gfx): Scene {
           .set('res', hdr!.w, hdr!.h)
           .set('width', 1.3 * (hdr!.h / 1080))
           .set('hotK', 1 - smoothstep(4, 10, t))
-          .set('baseK', (0.35 * smoothstep(0.5, 4, t) + 0.05 * smoothstep(0, 1, t)) * (1 - lattice))
+          .set('baseK', (0.35 * smoothstep(0.5, 4, t) + 0.05 * smoothstep(0, 1, t)) * (1 - smoothstep(7.5, 9.3, t)))
           .set('curve', curve);
         gl.bindVertexArray(vao);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, (24 + 1) * 2, E.length);

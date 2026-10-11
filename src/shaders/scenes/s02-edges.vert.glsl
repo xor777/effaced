@@ -48,6 +48,9 @@ void main() {
   float depth = c0.w;
   // edges far out in R³ (near the projection pole) fade away so the cage reads as an object
   float r = radius(u);
-  bright = (baseK + hot * hotK * 3.0) * smoothstep(0.02, 0.25, 1.0 - w0) / (1.0 + 0.04 * r * r * r) / (0.6 + 0.02 * depth * depth);
+  // edges passing close to the lens sweep across the whole screen within a frame or two (long
+  // flashing lines while the 4D rotation speeds up): fade them instead of brightening them
+  float nearK = mix(1.0, smoothstep(0.8, 2.6, depth), 1.0 - hot * hotK);
+  bright = (baseK + hot * hotK * 3.0) * nearK * smoothstep(0.02, 0.25, 1.0 - w0) / (1.0 + 0.04 * r * r * r) / (0.6 + 0.02 * depth * depth);
   col = mix(vec3(0.674, 0.807, 0.870), vec3(1.0, 0.92, 0.85), hot * hotK);
 }
