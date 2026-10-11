@@ -132,7 +132,7 @@ export interface ScopeParams {
   /** output size 0..1 */
   size: number;
 }
-export const SCOPE_DEFAULTS: ScopeParams = { a: 3, b: 2, drift: 0.05, morphTime: 4, spin: 0, size: 0.9 };
+export const SCOPE_DEFAULTS: ScopeParams = { a: 3, b: 2, drift: 0.05, morphTime: 0.8, spin: 0, size: 0.9 };
 
 /** a change on the ghost channel: a new traversal frequency (note-on) and/or a morph target (9xx) */
 export interface ScopeEvent {

@@ -34,7 +34,9 @@ const r = (pos: number, row: number) => pos * P + row;
 // 00 Lissajous … FF sigil). Volume = figure size: it grows from a dot.
 const ghost = new Tr(ROWS, INS.scope);
 ghost.n(0, 'C-4', 2, '900').ramp(1, 25, 4, 36, 2);
-ghost.fx(16, '920').fx(24, '940').fx(32, '960').fx(40, '980').fx(48, '9B0').fx(56, '9E0').fx(r(1, 0), '9FF');
+// the Lissajous resolves into the sigil through the first half of 00, so the whole maze stands for
+// the last ~3 s of the scene (it used to complete only at the cut to S01)
+ghost.fx(8, '920').fx(14, '940').fx(20, '960').fx(26, '980').fx(30, '9B0').fx(34, '9E0').fx(38, '9FF');
 // 01: the tone fades as the bell takes over its C, then lets go
 ghost.ramp(r(1, 0), r(1, 16), 36, 0, 2).off(r(1, 16));
 
