@@ -15,12 +15,17 @@ import {
 
 /**
  * Text carved into the two gates — edit freely. Line 0 is the title gate (one letter lights per lead
- * note in 05). Line 1 is the credits tablet on the second gate: one row per role, '\n' between rows,
- * shrunk to fit the gate. In 06 each row lights in two steps — the role, then the names — on the lead
- * notes nearest to CREDIT_CUES (rows of 06).
+ * note in 05). The other lines are the credits: one neat single-line neon sign on the second gate that
+ * cycles through them like a real sign — the old line flickers out, a moment of dark stone, the new
+ * one flickers on — at the lead notes nearest CREDIT_CUES. They share one letter size and tablet.
  */
-export const CREDITS = ['EFFACED', 'code — opus\nmusic — opus, xor777\ngfx — opus, xor777'];
-const CREDIT_CUES = [0, 6, 12, 16, 24, 28]; // role, names · role, names · role, names
+export const CREDITS = ['EFFACED', 'code — opus', 'music — opus, xor777', 'gfx — opus, xor777'];
+/** [position, row] at which each credit line comes on (snapped to the nearest lead note) */
+const CREDIT_CUES: [number, number][] = [
+  [0x05, 48], // seen through the title gate's arch as we approach it
+  [0x06, 8],
+  [0x06, 32], // the theme's peak, held while we stand in front of the gate
+];
 
 const AVENUE = 0; // x cell of the avenue (x ∈ [0, 7))
 const GATES = [7, 11]; // z rows of the gates (title, credits)
@@ -31,12 +36,12 @@ const CAM: number[][] = [
   [2.5, 3.45, 1.65, 13.0, 3.5, 3.3, 45],
   [5.0, 3.5, 2.3, 29.0, 3.5, 3.6, 55],
   [7.68, 3.5, 2.75, 45.0, 3.55, 4.6, 69],
-  // 06: rise and settle in front of the credits gate while its three rows light (readable to 06:52)
-  [9.2, 3.5, 5.7, 54.5, 3.5, 6.9, 69],
-  [11.5, 3.5, 6.5, 58.0, 3.52, 6.95, 69],
-  [13.3, 3.55, 7.1, 60.2, 3.58, 7.3, 69],
+  // 06: rise and settle in front of the credits gate while its sign cycles (readable to ~06:52)
+  [9.2, 3.5, 5.4, 54.5, 3.5, 6.3, 69],
+  [11.5, 3.5, 5.9, 58.0, 3.52, 6.25, 69],
+  [13.65, 3.55, 6.45, 60.4, 3.58, 6.5, 69],
   // then crane up over it: the city goes on for ever
-  [14.6, 3.7, 12.6, 66.0, 3.9, 9.6, 92],
+  [14.75, 3.7, 12.2, 66.0, 3.9, 9.6, 92],
   [15.36, 3.9, 15.6, 72.0, 4.2, 9.0, 112],
 ];
 
@@ -81,7 +86,7 @@ export function createCity(g: Gfx): Scene {
     }),
     programs: () => [prog, ...taa.programs()],
     init() {
-      atlas ??= textAtlas(g, CREDITS);
+      atlas ??= textAtlas(g, CREDITS, undefined, undefined, undefined, CREDITS.map((_, i) => i).slice(1));
     },
     render(f: FrameCtx, hdr) {
       if (!hdr || !atlas) return;
@@ -111,7 +116,7 @@ export function createCity(g: Gfx): Scene {
       // ---- signs: the title lights one letter per lead note, the credits one word per note
       const signs: Sign[] = [
         { cell: [AVENUE, GATES[0]], line: 0, height: Math.min(1.0, 6.0 / atlas.lines[0][3]), y: 6.3, level: 1, ...ignite(lead5, f.t) },
-        { cell: [AVENUE, GATES[1]], line: 1, height: Math.min(1.9, 6.1 / atlas.lines[1][3]), y: 6.95, level: 1, ...ignite(lead6, f.t, creditCounts(lead6, g1)) },
+        { cell: [AVENUE, GATES[1]], height: Math.min(0.62, 6.0 / atlas.lines[1][3]), y: 6.15, ...creditSign(f.t, [...lead5, ...lead6], atlas.count) },
       ];
 
       taa.begin(f, hdr, cam);
@@ -136,25 +141,35 @@ export function createCity(g: Gfx): Scene {
   return scene;
 }
 
-/** characters lit after each credit step: per row, the role (first word), then the whole row */
-const CREDIT_STEPS = (() => {
-  const out: number[] = [];
-  let base = 0;
-  for (const row of CREDITS[1].split('\n')) {
-    const role = row.trimStart().split(/\s/)[0];
-    out.push(base + row.indexOf(role) + role.length, base + row.length);
-    base += row.length;
-  }
-  return out;
-})();
+const ROWT = 0.12;
+const rnd = (x: number) => {
+  const v = Math.sin(x * 12.9898) * 43758.5453;
+  return v - Math.floor(v);
+};
 
-/** for each lead onset in 06: how many characters of the credits are lit (steps on the nearest cue) */
-function creditCounts(lead: number[], g1: number): number[] {
-  return lead.map((t) => {
-    const row = t / 0.12 - g1;
-    const k = CREDIT_CUES.filter((c) => c <= row + 1).length - 1;
-    return CREDIT_STEPS[Math.max(0, Math.min(CREDIT_STEPS.length - 1, k))];
+/**
+ * The credits sign at time t: which line it shows and how its neon behaves. Each change starts on a
+ * lead note: the old line flickers out (OUT), the stone stays dark (DARK), the new line flickers on.
+ */
+function creditSign(t: number, lead: number[], count: number[]): Omit<Sign, 'cell' | 'height' | 'y'> {
+  const OUT = 0.18, DARK = 0.24, ON = 0.32;
+  const cue = CREDIT_CUES.map(([p, r]) => {
+    const want = grow(p, r) * ROWT;
+    let best = want;
+    for (const x of lead) if (Math.abs(x - want) < Math.abs(best - want) - 1e-6 && Math.abs(x - want) <= 3 * ROWT) best = x;
+    return best;
   });
+  const i = lastIndex(cue, t);
+  if (i < 0) return { line: 1, lit: 0, from: 0, phase: 1, level: 1 }; // dark stone, letters carved
+  if (i > 0 && t < cue[i] + OUT) {
+    // the old line dying: stutters, brief flashes, gone
+    const u = (t - cue[i]) / OUT;
+    const on = rnd(Math.floor(t * 50)) > u * 1.1 ? 1 : 0.08;
+    return { line: i, lit: count[i], from: 0, phase: 1, level: on * (1 - 0.4 * u) };
+  }
+  const tOn = i === 0 ? cue[0] : cue[i] + OUT + DARK;
+  if (t < tOn) return { line: i + 1, lit: 0, from: 0, phase: 1, level: 1 };
+  return { line: i + 1, lit: count[i + 1], from: 0, phase: Math.min(1, (t - tOn) / ON), level: 1 };
 }
 
 // fallbacks (the galop of 05–06) for when no note data exists at all

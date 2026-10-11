@@ -164,9 +164,11 @@ function edt2d(g: Float64Array, w: number, h: number) {
  * Render `lines` with `font` into one SDF atlas, one band per entry. An entry may hold several rows
  * separated by '\n' (centred, one shared letter size) — a tablet with a few lines of text. Distances
  * are stored in band heights (r = 0.5 + 2·d, so ±0.25 band heights), the character index in g
- * (row-major over the entry's characters, newlines not counted).
+ * (row-major over the entry's characters, newlines not counted). Entries listed in `shared` get one
+ * letter size and one band width (text centred), so a sign can switch between them without its
+ * tablet changing size.
  */
-export function textAtlas(g: Gfx, lines: string[], font = '600 120px Didot, "Bodoni 72", Georgia, serif', LH = 160, W = 1600): TextAtlas {
+export function textAtlas(g: Gfx, lines: string[], font = '600 120px Didot, "Bodoni 72", Georgia, serif', LH = 160, W = 1600, shared: number[] = []): TextAtlas {
   const gl = g.gl;
   const entries = lines.map((s) => s.split('\n'));
   const bandH = entries.map((rows) => rows.length * LH);
@@ -185,13 +187,24 @@ export function textAtlas(g: Gfx, lines: string[], font = '600 120px Didot, "Bod
   const meta: TextAtlas['lines'] = [];
   const count: number[] = [];
   const letter = new Uint8Array(W * H);
-  let top = 0;
-  entries.forEach((rows, li) => {
+  // measure: one letter size per entry (the widest row fits, every row's ink fits its band)
+  const lay = entries.map((rows) => {
     const ms = rows.map((r) => cx.measureText(r));
     const maxW = Math.max(...ms.map((m) => m.width), 1);
     const inkH = Math.max(...ms.map((m) => m.actualBoundingBoxAscent + m.actualBoundingBoxDescent), 1);
-    // one letter size for the whole entry: the widest row fits, every row's ink fits its band
-    const scale = Math.min(1, (W - 2 * pad) / maxW, (LH * 0.86) / inkH);
+    return { ms, maxW, scale: Math.min(1, (W - 2 * pad) / maxW, (LH * 0.86) / inkH) };
+  });
+  if (shared.length) {
+    const sc = Math.min(...shared.map((i) => lay[i].scale));
+    const mw = Math.max(...shared.map((i) => lay[i].maxW));
+    for (const i of shared) {
+      lay[i].scale = sc;
+      lay[i].maxW = mw;
+    }
+  }
+  let top = 0;
+  entries.forEach((rows, li) => {
+    const { ms, maxW, scale } = lay[li];
     const capH = cx.measureText('H').actualBoundingBoxAscent * scale;
     const width = maxW * scale + 2 * pad;
     let charBase = 0;
@@ -202,6 +215,13 @@ export function textAtlas(g: Gfx, lines: string[], font = '600 120px Didot, "Bod
       cx.translate(x0, y0);
       cx.scale(scale, scale);
       cx.fillText(row, 0, 0);
+      // a Didot dash is a hairline that vanishes as neon at a distance: draw it as a proper tube
+      const dm = cx.measureText('—');
+      for (let i = row.indexOf('—'); i >= 0; i = row.indexOf('—', i + 1)) {
+        const xa = cx.measureText(row.slice(0, i)).width;
+        const yc = -(dm.actualBoundingBoxAscent - dm.actualBoundingBoxDescent) / 2;
+        cx.fillRect(xa + dm.width * 0.12, yc - 4.5, dm.width * 0.76, 9);
+      }
       cx.restore();
       // character index per column of this row: split between neighbouring characters halfway
       const edges: number[] = [];
