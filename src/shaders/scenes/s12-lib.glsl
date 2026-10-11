@@ -13,18 +13,21 @@ vec3 innerView(vec3 p) {
 // when (s after the hit) particle `w` leaves the canvas: most at once, a tail trickles out
 float launchAt(float w) { return burst * w * w * w; }
 
-vec3 aizawaF(vec3 p) {
-  return vec3((p.z - 0.7) * p.x - 3.5 * p.y, 3.5 * p.x + (p.z - 0.7) * p.y,
-              0.6 + 0.95 * p.z - p.z * p.z * p.z / 3.0 - (p.x * p.x + p.y * p.y) * (1.0 + 0.25 * p.z) + 0.1 * p.z * p.x * p.x * p.x);
+// Lorenz (σ 10, ρ 28, β 8/3): the butterfly — the canvas's own figure, the one that bursts out
+vec3 lorenzF(vec3 p) {
+  return vec3(10.0 * (p.y - p.x), p.x * (28.0 - p.z) - p.y, p.x * p.y - 2.6666667 * p.z);
 }
-// Halvorsen (a = 1.89): three-fold cyclic — the triangle to the Aizawa's circle
+// Lorenz → the canvas's frame: centred on the camera's target, z up, about 3.3 units tall (the wings are
+// face-on seen along (1, 1, 0): inner-camera yaw −π/4)
+vec3 baseFrame(vec3 q) { return vec3(q.x, q.y, q.z - 24.5) * 0.072 + vec3(0.0, 0.0, 0.35); }
+// Halvorsen (a = 1.89): three-fold cyclic — the triangle the butterfly turns into on the G/F bars
 vec3 halvorsenF(vec3 p) {
   const float a = 1.89;
   return vec3(-a * p.x - 4.0 * p.y - 4.0 * p.z - p.y * p.y,
               -a * p.y - 4.0 * p.z - 4.0 * p.x - p.z * p.z,
               -a * p.z - 4.0 * p.x - 4.0 * p.y - p.x * p.x);
 }
-// Halvorsen → the Aizawa's frame: its symmetry axis (1,1,1) on z, centred, scaled to the same size
+// Halvorsen → the canvas's frame: its symmetry axis (1,1,1) on z, centred, about the butterfly's size
 vec3 halvorsenFrame(vec3 q) {
   const vec3 U = vec3(0.70710678, -0.70710678, 0.0), V = vec3(0.40824829, 0.40824829, -0.81649658), W = vec3(0.57735027);
   return vec3(dot(q, U), dot(q, V), dot(q, W) + 4.57) * 0.125 + vec3(0.0, 0.0, 0.62);

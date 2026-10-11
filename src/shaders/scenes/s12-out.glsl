@@ -7,7 +7,7 @@
 in vec2 uv;
 layout(location = 0) out vec4 oP; // xyz, w = launched
 layout(location = 1) out vec4 oD; // excess velocity xyz, w = per-particle number
-uniform sampler2D st;             // inner (Aizawa) state, this step
+uniform sampler2D st;             // inner (Lorenz) state, this step
 uniform sampler2D sq;             // Thomas home, this step (attractor units)
 uniform sampler2D op, od;         // previous outer state
 uniform mat4 W;                   // canvas plane (H units) → stage space (H units)
@@ -26,7 +26,7 @@ void main() {
   if (reset == 1) P = vec4(0.0);
   if (P.w < 0.5) {
     // still in the picture: ride on the canvas plane
-    vec3 v = innerView(s.xyz);
+    vec3 v = innerView(baseFrame(s.xyz));
     P = vec4((W * vec4(v.xy, 0.0, 1.0)).xyz, 0.0);
     D = vec4(0.0, 0.0, 0.0, s.w);
     if (tRel >= launchAt(s.w)) {

@@ -1,6 +1,7 @@
 // S12 · Canvas (PLAN §4, §8): the lift E → F, the FACADE theme in lydian. The <canvas> itself shrinks
 // into a window and turns in CSS 3D — flat, zero thickness: the screen is a facade too. Inside it a
-// million particles circle on the Aizawa attractor. At the strongest accent (D-4, 19:32) they burst out
+// million particles fly on the Lorenz attractor — the butterfly, wings face-on, an eye-spot of rings on
+// each wing round its fixed point. At the strongest accent (D-4, 19:32) they burst out
 // of it, past its border, into a second full-screen canvas "outside" (its own WebGL2 context, composited
 // with `plus-lighter`), where they swirl on a Thomas attractor wrapped around the canvas; in the last
 // bar they settle on the creature's sigil, which S13 grows into a flame.
@@ -11,9 +12,10 @@
 //          a mirror (-webkit-box-reflect: its reflection turns with it) and its border glows;
 //   bars   each crash is a gesture of the window (a whip, a swing, a full turn on 18:48, a punch towards
 //          us on the orchestra hit of 19:00), and the window's fast moves leave afterimage frames;
-//          inside, the cloud morphs on the G/F bars (18:16, 18:48) from the Aizawa — the circle — into
-//          a Halvorsen — the triangle — in a vortex, and back on the F bars; the inner camera whips on
-//          the hits and rises to look down the axis while the triangle shows; the kick makes it breathe;
+//          inside, the cloud morphs on the G/F bars (18:16, 18:48) from the Lorenz butterfly into a
+//          Halvorsen — the triangle — in a vortex, and back on the F bars; the inner camera sways on
+//          the hits (the wings stay face-on) and rises to look down the axis while the triangle shows;
+//          the kick makes it breathe;
 //   19:16  the inhale (snare and timpani roll): the window recedes and trembles, the cloud contracts and
 //          heats up;
 //   19:32  the burst: the canvas flashes, the particles explode out of it white-hot, shock rings and a
@@ -34,13 +36,13 @@ import { markerTimes, hit, smoothstep } from '../timeline/events.ts';
 import { ROW, ROWS } from '../timeline/script.ts';
 import { sigilTables } from '../audio/synth/scope.ts';
 import { SIGIL_R, SIGIL_COL, BANDS, p3 } from './s13-erasure.ts'; // same sigil size and light, same banded splatting
-import { cues, pulse, steps, swell, type Cues, type Ev } from './s12-s13-cues.ts';
+import { cues, pulse, swell, type Cues, type Ev } from './s12-s13-cues.ts';
 
 const NW = 1024, NH = 1024; // 1M particles
 const RATE = 60; // simulation steps per second of song time (both contexts) — the scene runs at 60 Hz
-const H_AIZ = 0.013; // Aizawa time per step
+const H_BASE = 0.005; // Lorenz time per step
 const H_HAL = 0.0045; // Halvorsen time per step
-const BURN = 160; // settling steps of the Aizawa cloud (once, then kept as a seed)
+const BURN = 300, H_BURN = 0.01; // settling steps of the Lorenz cloud (once, then kept as a seed)
 const BURN_HAL = 400;
 const THOMAS_B = 0.2, THOMAS_H = 3.2 / RATE; // Thomas: dissipation b, attractor time per step
 const THOMAS_AT = [0, 0.02, -0.3, 0.2]; // its centre in the stage (H units) and its scale (H per unit)
@@ -141,6 +143,7 @@ export function createCanvas(g: Gfx): Scene {
   let sigTex: WebGLTexture | null = null;
   let sigN = 0;
   let steps_ = -1; // simulation steps done (both contexts), -1 = needs a reset
+  let pristine = false; // the state is the seed (0 steps), as the warm-up leaves it
   let warmed = false;
   let active = false;
   let wasOutside = false;
@@ -156,7 +159,7 @@ export function createCanvas(g: Gfx): Scene {
   };
   const BG = [p3('#24152E').map((x) => x * 1.1), p3('#0B0710')];
   // dev knobs (globalThis.__s12)
-  const dev = { ref: 100, expo: 1.0, gain: 0.65, pitch: 0.45, xk: 0.26, depthK: 1.0 };
+  const dev = { ref: 80, expo: 1.2, gain: 0.9, pitch: 0.25, yaw: -0.8, xk: 0.26, depthK: 1.0 };
   if (import.meta.env.DEV) (globalThis as unknown as { __s12: typeof dev }).__s12 = dev;
   const FRAME = p3('#FACADE');
 
@@ -218,7 +221,7 @@ export function createCanvas(g: Gfx): Scene {
     return p;
   };
 
-  /** Aizawa ↔ Halvorsen: 0..1 */
+  /** Lorenz ↔ Halvorsen: 0..1 */
   const morphAt = (p: Plan, t: number) => clamp01(p.morph.reduce((m, [te, d]) => m + d * ease((t - te) / (6 * ROW)), 0));
   /** the inhale 19:16–19:31 */
   const inhaleAt = (p: Plan, t: number) => easeIn((t - rowT(80)) / (p.hit - rowT(80))) * (t < p.hit ? 1 : 0);
@@ -227,8 +230,14 @@ export function createCanvas(g: Gfx): Scene {
   const innerCam = (p: Plan, t: number) => {
     const l = t - T0;
     const m = morphAt(p, t);
-    const yaw = 0.3 * l + 0.4 + 0.75 * steps(p.whips, t, 0.16);
-    const pitch = 0.2 + dev.pitch + 0.08 * Math.sin(l * 0.37) + 0.95 * m;
+    // the butterfly stays face-on: the view sways (each hit a whip, alternately left and right) instead of
+    // circling it; while the triangle shows, it turns and the camera rises to look down its axis
+    let whip = 0;
+    p.whips.forEach((e, i) => {
+      if (e.t <= t) whip += (i % 2 ? -1 : 1) * 0.5 * e.v * (1 - Math.exp(-(t - e.t) / 0.16));
+    });
+    const yaw = dev.yaw + 0.3 * Math.sin(0.45 * l) + whip + 1.6 * m;
+    const pitch = dev.pitch + 0.06 * Math.sin(l * 0.37) + 1.2 * m;
     const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
     // R = Rx(pitch) · [x, z, −y] · Rz(yaw), as a GLSL mat3 (column-major)
     const rzm = [cy, sy, 0, -sy, cy, 0, 0, 0, 1];
@@ -305,7 +314,7 @@ export function createCanvas(g: Gfx): Scene {
     gx.bindFramebuffer(gx.READ_FRAMEBUFFER, null);
     gx.bindFramebuffer(gx.DRAW_FRAMEBUFFER, null);
   };
-  const aizawa = (c: Ctx, reset = false, h = H_AIZ) =>
+  const base = (c: Ctx, reset = false, h = H_BASE) =>
     pass(c.g, c.inner, c.sim, (p) => p.tex('st', c.inner.read.tex[0], 0).set('h', h).set('reset', reset ? 1 : 0).set('kind', 0));
   const halvorsen = (reset = false) =>
     pass(g, A.hal!, A.sim, (p) => p.tex('st', A.hal!.read.tex[0], 0).set('h', H_HAL).set('reset', reset ? 1 : 0).set('kind', 1));
@@ -317,8 +326,8 @@ export function createCanvas(g: Gfx): Scene {
     for (const c of [A, B]) {
       const spec = { formats: [c.g.gl.RGBA32F], filter: c.g.gl.NEAREST };
       if (!c.seed) {
-        aizawa(c, true);
-        for (let i = 0; i < BURN; i++) aizawa(c);
+        base(c, true, H_BURN);
+        for (let i = 0; i < BURN; i++) base(c, false, H_BURN);
         c.seed = ensureTarget(c.g, null, NW, NH, spec);
         copy(c.g, c.inner.read, c.seed);
       }
@@ -511,6 +520,10 @@ export function createCanvas(g: Gfx): Scene {
     },
     render(f: FrameCtx, hdr: Target | null) {
       const t = f.t;
+      // a render without enter() is the loader's (or a re-warm's) pipeline warm-up: exercise every pass of
+      // both contexts at the current size — above all the outside's, whose histogram, mips and drawing
+      // buffer would otherwise be (re)allocated on the cut at 18:00 (≈ 15–20 ms, a dropped frame)
+      const warming = !warmed || !active;
       const p = plan(f.audio);
       const c = p.c;
       const tHit = p.hit;
@@ -528,24 +541,26 @@ export function createCanvas(g: Gfx): Scene {
       // ---- simulation, lock-step in both contexts
       const N = Math.max(0, Math.floor((t - T0) * RATE + 1e-6));
       const outFrom = Math.floor((tHit - T0) * RATE) - 2; // the outside's particles start just before the hit
-      if (f.jumped || steps_ < 0 || N < steps_ || N - steps_ > 4 * RATE || !warmed) {
-        resetSim();
+      if (f.jumped || steps_ < 0 || N < steps_ || N - steps_ > 4 * RATE || warming) {
+        // (the warm-up leaves the state at the seed: the cut at 18:00 needs no copies)
+        if (!(pristine && N === 0) || warming) resetSim();
         steps_ = 0;
       }
+      if (N > 0) pristine = false;
       const allOut = Math.ceil((tHit + 0.2 - T0) * RATE); // every particle has left the canvas by then
       while (steps_ < N) {
         steps_++;
         if (steps_ <= allOut) {
-          aizawa(A);
+          base(A);
           if (morphAt(p, T0 + steps_ / RATE) > 0 || morphAt(p, T0 + (steps_ + RATE) / RATE) > 0) halvorsen();
         }
         if (steps_ >= outFrom) {
-          if (steps_ <= allOut) aizawa(B);
+          if (steps_ <= allOut) base(B);
           thomas();
           outStep(p, T0 + steps_ / RATE, steps_ === outFrom);
         }
       }
-      if (!warmed) outStep(p, t, true); // pipeline warm-up
+      if (warming) outStep(p, t, true); // pipeline warm-up
 
       // ---- the canvas: particles that have not left yet, a ghost of those that have
       const after = t - tHit;
@@ -559,7 +574,7 @@ export function createCanvas(g: Gfx): Scene {
       const bgK = 1 - smoothstep(p.land0, p.land1 - 0.3, t);
       const inh = inhaleAt(p, t);
       const flashA = hit(t, tHit, 0.008, 0.07);
-      draw(A, f, p, t, hdr, f.jumped || !warmed ? 0 : decayA, !(t > tHit + 0.25), (pr) =>
+      draw(A, f, p, t, hdr, f.jumped || warming ? 0 : decayA, !(t > tHit + 0.25), (pr) =>
         pr
           .set('ref', dev.ref)
           .set('floor_', 0.3)
@@ -573,7 +588,7 @@ export function createCanvas(g: Gfx): Scene {
       );
 
       // ---- the outside: the window's afterimages before the hit, the particles after
-      const outside = after > -0.02 || !warmed;
+      const outside = after > -0.02 || warming;
       const ghost = new Float32Array(32), gI = [0, 0, 0, 0];
       // 0: the full-screen frame the canvas leaves behind at 18:00
       const g0 = 0.9 * Math.exp(-Math.max(0, t - T0) / 0.6) * (t >= T0 ? 1 : 0);
@@ -606,7 +621,7 @@ export function createCanvas(g: Gfx): Scene {
         const conv = smoothstep(p.land0, p.land1, t);
         const decayB = f.dt > 0 ? Math.exp(-f.dt / (0.04 + 0.12 * Math.exp(-Math.max(0, after) / 0.5))) : 1;
         const flashB = hit(t, tHit, 0.006, 0.12);
-        draw(B, f, p, t, null, f.jumped || !warmed || !wasOutside || !outside ? 0 : decayB, outside, (pr) =>
+        draw(B, f, p, t, null, f.jumped || warming || !wasOutside || !outside ? 0 : decayB, outside, (pr) =>
           pr
             .set('ref', 160)
             .set('floor_', 0.3)
@@ -622,11 +637,24 @@ export function createCanvas(g: Gfx): Scene {
         );
       }
       wasOutside = outside;
-      if (!warmed) {
-        // the loader renders this scene once before the hit: make sure every pipeline of the outside exists
+      if (warming) {
+        // the loader renders this scene once before the hit: make sure every pipeline of the outside exists;
+        // then leave everything as the cut at 18:00 wants it — the simulation at its seed, the outside's
+        // histogram empty with its mips — so that first frame does only a frame's work
+        resetSim();
+        steps_ = 0;
+        pristine = true;
+        bindTarget(g2, B.hist);
+        gl2.clearColor(0, 0, 0, 0);
+        gl2.clear(gl2.COLOR_BUFFER_BIT);
+        gl2.bindTexture(gl2.TEXTURE_2D, B.hist!.tex[0]);
+        gl2.generateMipmap(gl2.TEXTURE_2D);
+        B.acc = 0;
+        B.W = 1;
+        B.empty = true;
+        wasOutside = false;
         bindTarget(g, hdr);
         warmed = true;
-        steps_ = -1;
       }
     },
   };

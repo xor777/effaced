@@ -1,4 +1,4 @@
-// S12 · Canvas — the creature as a cloud on the Aizawa attractor, one RK4 step per pass.
+// S12 · Canvas — the creature as a cloud on the Lorenz attractor, one RK4 step per pass.
 // Runs in lock-step in BOTH WebGL contexts (the canvas and the "outside"): same source, same inputs,
 // same step count from the song time → bit-identical states, so a particle can leave one canvas and
 // appear in the other at the same place. kind 1: the same particles on a Halvorsen attractor (the
@@ -10,7 +10,7 @@ out vec4 o;
 uniform sampler2D st; // xyz position, w per-particle random
 uniform float h;      // step (attractor time units)
 uniform int reset;
-uniform int kind;     // 0 Aizawa, 1 Halvorsen
+uniform int kind;     // 0 Lorenz, 1 Halvorsen
 
 void main() {
   ivec2 ip = ivec2(gl_FragCoord.xy);
@@ -23,13 +23,13 @@ void main() {
     vec3 sh = vec3(sqrt(1.0 - z * z) * cos(th), sqrt(1.0 - z * z) * sin(th), z);
     // w (the particle's own number: launch order, place on the sigil, colour) = its initial longitude,
     // a dye that the flow then carries and folds
-    s = kind == 0 ? vec4(sh * (0.6 + 0.6 * u3) + vec3(0, 0, 0.4), u1) : vec4(sh * (2.0 + 4.0 * u3) - 2.6, u1);
+    s = kind == 0 ? vec4(sh * (4.0 + 14.0 * u3) + vec3(0, 0, 24.0), u1) : vec4(sh * (2.0 + 4.0 * u3) - 2.6, u1);
   }
   vec3 p = s.xyz;
   if (kind == 0) {
-    vec3 k1 = aizawaF(p), k2 = aizawaF(p + 0.5 * h * k1), k3 = aizawaF(p + 0.5 * h * k2), k4 = aizawaF(p + h * k3);
+    vec3 k1 = lorenzF(p), k2 = lorenzF(p + 0.5 * h * k1), k3 = lorenzF(p + 0.5 * h * k2), k4 = lorenzF(p + h * k3);
     p += h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
-    if (!(abs(p.x) < 10.0 && abs(p.y) < 10.0 && abs(p.z) < 10.0)) p = vec3(0.1, 0.0, 0.5);
+    if (!(abs(p.x) < 200.0 && abs(p.y) < 200.0 && abs(p.z) < 200.0)) p = vec3(1.0, 1.0, 20.0);
   } else {
     vec3 k1 = halvorsenF(p), k2 = halvorsenF(p + 0.5 * h * k1), k3 = halvorsenF(p + 0.5 * h * k2), k4 = halvorsenF(p + h * k3);
     p += h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
