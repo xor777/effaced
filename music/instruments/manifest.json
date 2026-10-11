@@ -1,0 +1,2064 @@
+{
+ "sampleRate": 44100,
+ "generator": "tools/build-instruments.ts (bank v1)",
+ "notes": [
+  "bank v1: sampled slots from VSCO 2 Community Edition and VCSL by Versilian Studios (CC0), see each entry's `sources`; synthetic slots from src/audio/synth/bank.ts.",
+  "Tuning: every pitched zone is resampled to an XM-exact rate (src/audio/synth/bank.ts xmExactRate) after its pitch was measured, so libopenmpt/FT2 1/16-semitone finetune is exact.",
+  "Levels (`level`, zone `lufs` / `v0Lufs`): every zone is calibrated to the loudness of the v0 zone that played the same key (the bank the score was balanced against), plus the listed corrections — the same volume-column value gives the v0 role level in every register. Metric: K-weighted LUFS of the mono zone at its root — loops: held note 0.5–3 s; one-shots and ring instruments (bell, e-piano, harp): momentary 400 ms max. `shortfallDb`: how far the loudest zone stayed under its target (full-scale limit).",
+  "Sends (`sends`) are the engine FX sends (src/audio/engine-core.ts reads them from BANK in src/audio/synth/bank.ts)."
+ ],
+ "repairs": [
+  "cleanHead:3",
+  "cleanHead:5",
+  "splits:3",
+  "timpani:dropE2",
+  "timpani:E2fromA2"
+ ],
+ "instruments": [
+  {
+   "slot": 1,
+   "name": "choir aah",
+   "file": "01-aah-A3.wav",
+   "rootMidi": 57,
+   "loopStart": 0,
+   "loopLength": 65536,
+   "loopType": 1,
+   "volume": 48,
+   "panning": 128,
+   "fadeout": 512,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      0
+     ],
+     [
+      18,
+      64
+     ],
+     [
+      53,
+      0
+     ]
+    ],
+    "sustain": 1
+   },
+   "sends": {
+    "reverb": 0.5,
+    "delay": 0,
+    "chorus": 0.3
+   },
+   "kind": "pad",
+   "note": "PADsynth mixed choir \"aah\" (male + female formant sets), 3 zones A3/F#4/G#5 (placed so the score's 3xx legato chains stay within ±7 semitones), 22 kHz, 3 s loops, slow attack",
+   "source": "synth",
+   "sources": [
+    "synthetic: pad (src/audio/synth/bank.ts) at 22050 Hz"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 66,
+    "v0Lufs": -12.1,
+    "correctionDb": 0,
+    "targetLufs": -12.1,
+    "lufs": -12.1,
+    "peakDb": -0.86,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.23,
+   "zones": [
+    {
+     "file": "01-aah-A3.wav",
+     "rootMidi": 57,
+     "lo": 0,
+     "hi": 61,
+     "loopStart": 0,
+     "loopLength": 65536,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -12,
+     "v0Lufs": -12
+    },
+    {
+     "file": "01-aah-Fs4.wav",
+     "rootMidi": 66,
+     "lo": 62,
+     "hi": 73,
+     "loopStart": 0,
+     "loopLength": 65536,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -12.1,
+     "v0Lufs": -12.1
+    },
+    {
+     "file": "01-aah-Gs5.wav",
+     "rootMidi": 80,
+     "lo": 74,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 65536,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -12.7,
+     "v0Lufs": -12.7
+    }
+   ]
+  },
+  {
+   "slot": 2,
+   "name": "choir ooh",
+   "file": "02-ooh-E4.wav",
+   "rootMidi": 64,
+   "loopStart": 0,
+   "loopLength": 32768,
+   "loopType": 1,
+   "volume": 50,
+   "panning": 128,
+   "fadeout": 512,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      0
+     ],
+     [
+      20,
+      64
+     ],
+     [
+      60,
+      0
+     ]
+    ],
+    "sustain": 1
+   },
+   "sends": {
+    "reverb": 0.55,
+    "delay": 0,
+    "chorus": 0.3
+   },
+   "kind": "pad",
+   "note": "PADsynth mixed choir \"ooh\", darker and rounder, 2 zones E3/E4, 22 kHz, 1.5 s loops",
+   "source": "synth",
+   "sources": [
+    "synthetic: pad (src/audio/synth/bank.ts) at 22050 Hz"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 64,
+    "v0Lufs": -10.2,
+    "correctionDb": 0,
+    "targetLufs": -10.2,
+    "lufs": -10.2,
+    "peakDb": -1.54,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.07,
+   "zones": [
+    {
+     "file": "02-ooh-E3.wav",
+     "rootMidi": 52,
+     "lo": 0,
+     "hi": 58,
+     "loopStart": 0,
+     "loopLength": 32768,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -14.5,
+     "v0Lufs": -14.5
+    },
+    {
+     "file": "02-ooh-E4.wav",
+     "rootMidi": 64,
+     "lo": 59,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 32768,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.2,
+     "v0Lufs": -10.2
+    }
+   ]
+  },
+  {
+   "slot": 3,
+   "name": "strings",
+   "file": "03-strings-B3.wav",
+   "rootMidi": 59,
+   "loopStart": 10968,
+   "loopLength": 31849,
+   "loopType": 1,
+   "volume": 46,
+   "panning": 128,
+   "fadeout": 768,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      12
+     ],
+     [
+      4,
+      40
+     ],
+     [
+      10,
+      64
+     ],
+     [
+      35,
+      0
+     ]
+    ],
+    "sustain": 2
+   },
+   "sends": {
+    "reverb": 0.35,
+    "delay": 0,
+    "chorus": 0.12
+   },
+   "kind": "sampled",
+   "note": "section strings (cello / viola / violin ensembles layered in unison), 5 zones G2…G5, 28 kHz, 1.1 s loops; envelope −14 dB → full in 0.2 s over a clean 40 ms onset (start 1 row early as in v0)",
+   "source": "sampled",
+   "sources": [
+    "VSCO 2 CE Strings: Cello Section susvib v3, Viola Section susvib v2, Violin Section susVib v2 (unison layers per zone)"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 59,
+    "v0Lufs": -12.4,
+    "correctionDb": 0,
+    "targetLufs": -12.4,
+    "lufs": -12.4,
+    "peakDb": -0.94,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.087,
+   "zones": [
+    {
+     "file": "03-strings-G2.wav",
+     "rootMidi": 43,
+     "lo": 0,
+     "hi": 45,
+     "loopStart": 7300,
+     "loopLength": 30608,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -12.4,
+     "v0Lufs": -12.4
+    },
+    {
+     "file": "03-strings-D3.wav",
+     "rootMidi": 50,
+     "lo": 46,
+     "hi": 53,
+     "loopStart": 7108,
+     "loopLength": 29852,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -12.4,
+     "v0Lufs": -12.4
+    },
+    {
+     "file": "03-strings-B3.wav",
+     "rootMidi": 59,
+     "lo": 54,
+     "hi": 60,
+     "loopStart": 10968,
+     "loopLength": 31849,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -12.4,
+     "v0Lufs": -12.4
+    },
+    {
+     "file": "03-strings-A4.wav",
+     "rootMidi": 69,
+     "lo": 61,
+     "hi": 72,
+     "loopStart": 8076,
+     "loopLength": 29862,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -12.6,
+     "v0Lufs": -12.6
+    },
+    {
+     "file": "03-strings-G5.wav",
+     "rootMidi": 79,
+     "lo": 73,
+     "hi": 127,
+     "loopStart": 7516,
+     "loopLength": 29998,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -13.8,
+     "v0Lufs": -13.8
+    }
+   ]
+  },
+  {
+   "slot": 4,
+   "name": "warm pad",
+   "file": "04-pad-C3.wav",
+   "rootMidi": 48,
+   "loopStart": 0,
+   "loopLength": 16384,
+   "loopType": 1,
+   "volume": 46,
+   "panning": 128,
+   "fadeout": 256,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      0
+     ],
+     [
+      35,
+      64
+     ],
+     [
+      95,
+      0
+     ]
+    ],
+    "sustain": 1
+   },
+   "sends": {
+    "reverb": 0.55,
+    "delay": 0.1,
+    "chorus": 0.4
+   },
+   "kind": "pad",
+   "note": "PADsynth warm hollow pad, 2 zones C3/C5, 22 kHz, 0.74 s loops, very slow attack, no LFO; spectrum ends at 7 kHz so ±10 semitone glides stay alias-free",
+   "source": "synth",
+   "sources": [
+    "synthetic: pad (src/audio/synth/bank.ts) at 22050 Hz"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 72,
+    "v0Lufs": -13.1,
+    "correctionDb": 0,
+    "targetLufs": -13.1,
+    "lufs": -13.1,
+    "peakDb": -4.04,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.026,
+   "zones": [
+    {
+     "file": "04-pad-C3.wav",
+     "rootMidi": 48,
+     "lo": 0,
+     "hi": 60,
+     "loopStart": 0,
+     "loopLength": 16384,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -12.5,
+     "v0Lufs": -12.5
+    },
+    {
+     "file": "04-pad-C5.wav",
+     "rootMidi": 72,
+     "lo": 61,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 16384,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -13.1,
+     "v0Lufs": -13.1
+    }
+   ]
+  },
+  {
+   "slot": 5,
+   "name": "brass section",
+   "file": "05-brass-C4.wav",
+   "rootMidi": 60,
+   "loopStart": 8767,
+   "loopLength": 21537,
+   "loopType": 1,
+   "volume": 48,
+   "panning": 128,
+   "fadeout": 1024,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      11,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "sends": {
+    "reverb": 0.25,
+    "delay": 0.05,
+    "chorus": 0
+   },
+   "kind": "sampled",
+   "note": "brass section: horns + trombones (low), + trumpets (mid/high), 5 zones D#2…F5, 28 kHz, 0.8 s loops",
+   "source": "sampled",
+   "sources": [
+    "VSCO 2 CE Brass: F Horn sus v3 (v1 at F5), Tenor Trombone sus v3, Trumpet sus v3"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 67,
+    "v0Lufs": -8.7,
+    "correctionDb": 0,
+    "targetLufs": -8.7,
+    "lufs": -8.7,
+    "peakDb": -0.06,
+    "softClipped": 2756,
+    "limitedDb": 0,
+    "shortfallDb": 1.3
+   },
+   "attackSec": 0.081,
+   "zones": [
+    {
+     "file": "05-brass-Ds2.wav",
+     "rootMidi": 39,
+     "lo": 0,
+     "hi": 44,
+     "loopStart": 7199,
+     "loopLength": 23276,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -9.8,
+     "v0Lufs": -8.5
+    },
+    {
+     "file": "05-brass-D3.wav",
+     "rootMidi": 50,
+     "lo": 45,
+     "hi": 55,
+     "loopStart": 7375,
+     "loopLength": 21471,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -8.55,
+     "v0Lufs": -8.5
+    },
+    {
+     "file": "05-brass-C4.wav",
+     "rootMidi": 60,
+     "lo": 56,
+     "hi": 63,
+     "loopStart": 8767,
+     "loopLength": 21537,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -8.5,
+     "v0Lufs": -8.5
+    },
+    {
+     "file": "05-brass-G4.wav",
+     "rootMidi": 67,
+     "lo": 64,
+     "hi": 72,
+     "loopStart": 13367,
+     "loopLength": 22724,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -8.7,
+     "v0Lufs": -8.7
+    },
+    {
+     "file": "05-brass-F5.wav",
+     "rootMidi": 77,
+     "lo": 73,
+     "hi": 127,
+     "loopStart": 13655,
+     "loopLength": 23342,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -8.7,
+     "v0Lufs": -8.7
+    }
+   ]
+  },
+  {
+   "slot": 6,
+   "name": "pm lead",
+   "file": "06-lead-E4.wav",
+   "rootMidi": 64,
+   "loopStart": 9249,
+   "loopLength": 6972,
+   "loopType": 1,
+   "volume": 46,
+   "panning": 128,
+   "fadeout": 1024,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      6,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "sends": {
+    "reverb": 0.28,
+    "delay": 0.25,
+    "chorus": 0.12
+   },
+   "kind": "synth",
+   "note": "PM-style lead: 3 detuned saw/pulse oscillators, warm 2-stage lowpass (bright, not buzzy; add vibrato with 4xy)",
+   "source": "synth",
+   "sources": [
+    "synthetic: synth (src/audio/synth/bank.ts) at 28000 Hz"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 64,
+    "v0Lufs": -6,
+    "correctionDb": 0,
+    "targetLufs": -6,
+    "lufs": -6,
+    "peakDb": -1.49,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.002,
+   "zones": [
+    {
+     "file": "06-lead-E4.wav",
+     "rootMidi": 64,
+     "lo": 0,
+     "hi": 70,
+     "loopStart": 9249,
+     "loopLength": 6972,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -6,
+     "v0Lufs": -6
+    },
+    {
+     "file": "06-lead-E5.wav",
+     "rootMidi": 76,
+     "lo": 71,
+     "hi": 127,
+     "loopStart": 9249,
+     "loopLength": 7015,
+     "loopType": 1,
+     "rate": 28028,
+     "lufs": -5.7,
+     "v0Lufs": -5.7
+    }
+   ]
+  },
+  {
+   "slot": 7,
+   "name": "bell",
+   "file": "07-bell-E4.wav",
+   "rootMidi": 64,
+   "loopStart": 17669,
+   "loopLength": 6432,
+   "loopType": 1,
+   "volume": 44,
+   "panning": 128,
+   "fadeout": 1638,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      40,
+      64
+     ],
+     [
+      56,
+      39
+     ],
+     [
+      72,
+      24
+     ],
+     [
+      87,
+      15
+     ],
+     [
+      103,
+      9
+     ],
+     [
+      119,
+      6
+     ],
+     [
+      135,
+      4
+     ],
+     [
+      150,
+      2
+     ],
+     [
+      166,
+      1
+     ],
+     [
+      182,
+      1
+     ],
+     [
+      198,
+      0
+     ]
+    ]
+   },
+   "sends": {
+    "reverb": 0.45,
+    "delay": 0.25,
+    "chorus": 0
+   },
+   "kind": "sampled",
+   "note": "soft-mallet bell: vibraphone + hand chimes + a quiet FM bell layer; 8 ms soft attack, dark top (≤ 7 kHz); 4 zones E4…C6 at 22 kHz; the ring after 0.8 s is the envelope (T60 4.5 s); 0.8 s key-off release",
+   "source": "sampled",
+   "sources": [
+    "VCSL Vibraphone soft mallets (v1)",
+    "VCSL Hand Chimes",
+    "FM bell layer (bank v0 generator, soft index) at −9 dB"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms of the first 1.2 s (LUFS, mono)",
+    "refMidi": 64,
+    "v0Lufs": -4.8,
+    "correctionDb": -3,
+    "targetLufs": -7.8,
+    "lufs": -7.89,
+    "peakDb": -0.18,
+    "softClipped": 0,
+    "limitedDb": 2.21,
+    "shortfallDb": 0.09,
+    "why": "the v0 FM bell \"hammered\": 3 dB lower, plus an 8 ms soft attack and a dark top"
+   },
+   "attackSec": 0.019,
+   "zones": [
+    {
+     "file": "07-bell-E4.wav",
+     "rootMidi": 64,
+     "lo": 0,
+     "hi": 67,
+     "loopStart": 17669,
+     "loopLength": 6432,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -7.89,
+     "v0Lufs": -4.8
+    },
+    {
+     "file": "07-bell-B4.wav",
+     "rootMidi": 71,
+     "lo": 68,
+     "hi": 74,
+     "loopStart": 17669,
+     "loopLength": 7066,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -7.89,
+     "v0Lufs": -4.8
+    },
+    {
+     "file": "07-bell-F5.wav",
+     "rootMidi": 77,
+     "lo": 75,
+     "hi": 80,
+     "loopStart": 17669,
+     "loopLength": 6388,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -7.87,
+     "v0Lufs": -4.8
+    },
+    {
+     "file": "07-bell-C6.wav",
+     "rootMidi": 84,
+     "lo": 81,
+     "hi": 127,
+     "loopStart": 17669,
+     "loopLength": 7030,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -7.04,
+     "v0Lufs": -4
+    }
+   ]
+  },
+  {
+   "slot": 8,
+   "name": "fm e-piano",
+   "file": "08-epiano-Gs3.wav",
+   "rootMidi": 56,
+   "loopStart": 11043,
+   "loopLength": 3403,
+   "loopType": 1,
+   "volume": 50,
+   "panning": 128,
+   "fadeout": 4095,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      25,
+      64
+     ],
+     [
+      34,
+      39
+     ],
+     [
+      43,
+      24
+     ],
+     [
+      51,
+      15
+     ],
+     [
+      60,
+      9
+     ],
+     [
+      69,
+      6
+     ],
+     [
+      78,
+      4
+     ],
+     [
+      86,
+      2
+     ],
+     [
+      95,
+      1
+     ],
+     [
+      104,
+      1
+     ],
+     [
+      113,
+      0
+     ]
+    ]
+   },
+   "sends": {
+    "reverb": 0.3,
+    "delay": 0.12,
+    "chorus": 0.45
+   },
+   "kind": "sampled",
+   "note": "Yamaha TX81Z \"FM Piano\" (real FM hardware), 3 zones G#3/E4/C5 at 22 kHz, 6 ms soft attack, ≈3 s decay (envelope after 0.5 s)",
+   "source": "sampled",
+   "sources": [
+    "VCSL Electrophones/TX81Z FM Piano (vl2)"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms of the first 1.2 s (LUFS, mono)",
+    "refMidi": 64,
+    "v0Lufs": -11.3,
+    "correctionDb": 0,
+    "targetLufs": -11.3,
+    "lufs": -11.3,
+    "peakDb": -1.65,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.001,
+   "zones": [
+    {
+     "file": "08-epiano-Gs3.wav",
+     "rootMidi": 56,
+     "lo": 0,
+     "hi": 60,
+     "loopStart": 11043,
+     "loopLength": 3403,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -11.3,
+     "v0Lufs": -11.3
+    },
+    {
+     "file": "08-epiano-E4.wav",
+     "rootMidi": 64,
+     "lo": 61,
+     "hi": 68,
+     "loopStart": 11043,
+     "loopLength": 3484,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -11.3,
+     "v0Lufs": -11.3
+    },
+    {
+     "file": "08-epiano-C5.wav",
+     "rootMidi": 72,
+     "lo": 69,
+     "hi": 127,
+     "loopStart": 11043,
+     "loopLength": 3377,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -11.1,
+     "v0Lufs": -11.1
+    }
+   ]
+  },
+  {
+   "slot": 9,
+   "name": "harp",
+   "file": "09-harp-G3.wav",
+   "rootMidi": 55,
+   "loopStart": 8314,
+   "loopLength": 3978,
+   "loopType": 1,
+   "volume": 50,
+   "panning": 128,
+   "fadeout": 2185,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      16,
+      64
+     ],
+     [
+      24,
+      39
+     ],
+     [
+      31,
+      24
+     ],
+     [
+      39,
+      15
+     ],
+     [
+      47,
+      9
+     ],
+     [
+      55,
+      6
+     ],
+     [
+      62,
+      4
+     ],
+     [
+      70,
+      2
+     ],
+     [
+      78,
+      1
+     ],
+     [
+      85,
+      1
+     ],
+     [
+      93,
+      0
+     ]
+    ]
+   },
+   "sends": {
+    "reverb": 0.38,
+    "delay": 0.12,
+    "chorus": 0
+   },
+   "kind": "sampled",
+   "note": "concert harp, 5 zones A2/G3/F4/E5/D6 at 26 kHz; the ring after 0.3 s is the envelope (T60 2.2 s)",
+   "source": "sampled",
+   "sources": [
+    "VSCO 2 CE Strings/Harp (mf)"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms of the first 1.2 s (LUFS, mono)",
+    "refMidi": 65,
+    "v0Lufs": -14.3,
+    "correctionDb": 0,
+    "targetLufs": -14.3,
+    "lufs": -14.3,
+    "peakDb": -2.32,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.009,
+   "zones": [
+    {
+     "file": "09-harp-A2.wav",
+     "rootMidi": 45,
+     "lo": 0,
+     "hi": 50,
+     "loopStart": 8314,
+     "loopLength": 3780,
+     "loopType": 1,
+     "rate": 25982,
+     "lufs": -12.1,
+     "v0Lufs": -12.1
+    },
+    {
+     "file": "09-harp-G3.wav",
+     "rootMidi": 55,
+     "lo": 51,
+     "hi": 60,
+     "loopStart": 8314,
+     "loopLength": 3978,
+     "loopType": 1,
+     "rate": 25982,
+     "lufs": -14.3,
+     "v0Lufs": -14.3
+    },
+    {
+     "file": "09-harp-F4.wav",
+     "rootMidi": 65,
+     "lo": 61,
+     "hi": 70,
+     "loopStart": 8314,
+     "loopLength": 4465,
+     "loopType": 1,
+     "rate": 25982,
+     "lufs": -14.3,
+     "v0Lufs": -14.3
+    },
+    {
+     "file": "09-harp-E5.wav",
+     "rootMidi": 76,
+     "lo": 71,
+     "hi": 81,
+     "loopStart": 8314,
+     "loopLength": 3862,
+     "loopType": 1,
+     "rate": 25982,
+     "lufs": -14.1,
+     "v0Lufs": -14.1
+    },
+    {
+     "file": "09-harp-D6.wav",
+     "rootMidi": 86,
+     "lo": 82,
+     "hi": 127,
+     "loopStart": 8314,
+     "loopLength": 4510,
+     "loopType": 1,
+     "rate": 25982,
+     "lufs": -16.1,
+     "v0Lufs": -16.1
+    }
+   ]
+  },
+  {
+   "slot": 10,
+   "name": "bass",
+   "file": "10-bass-A3.wav",
+   "rootMidi": 57,
+   "loopStart": 6626,
+   "loopLength": 2610,
+   "loopType": 1,
+   "volume": 54,
+   "panning": 128,
+   "fadeout": 2048,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      4,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "sends": {
+    "reverb": 0.03,
+    "delay": 0,
+    "chorus": 0
+   },
+   "kind": "synth",
+   "note": "saw/pulse bass, filter pluck, drive: strong harmonics 2–10 carry it on laptop speakers and when the engine removes the fundamental (0D–0E); 3 zones D2/B2/A3, 22 kHz",
+   "source": "synth",
+   "sources": [
+    "synthetic: synth (src/audio/synth/bank.ts) at 22050 Hz"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 57,
+    "v0Lufs": -4.2,
+    "correctionDb": 0,
+    "targetLufs": -4.2,
+    "lufs": -4.2,
+    "peakDb": -1.38,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0,
+   "zones": [
+    {
+     "file": "10-bass-D2.wav",
+     "rootMidi": 38,
+     "lo": 0,
+     "hi": 42,
+     "loopStart": 6626,
+     "loopLength": 2707,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -6.1,
+     "v0Lufs": -6.1
+    },
+    {
+     "file": "10-bass-B2.wav",
+     "rootMidi": 47,
+     "lo": 43,
+     "hi": 52,
+     "loopStart": 6626,
+     "loopLength": 2683,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -4.2,
+     "v0Lufs": -4.2
+    },
+    {
+     "file": "10-bass-A3.wav",
+     "rootMidi": 57,
+     "lo": 53,
+     "hi": 127,
+     "loopStart": 6626,
+     "loopLength": 2610,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -4.2,
+     "v0Lufs": -4.2
+    }
+   ]
+  },
+  {
+   "slot": 11,
+   "name": "sub",
+   "file": "11-sub.wav",
+   "rootMidi": 36,
+   "loopStart": 1,
+   "loopLength": 22286,
+   "loopType": 1,
+   "volume": 52,
+   "panning": 128,
+   "fadeout": 2048,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      4,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "sends": {
+    "reverb": 0,
+    "delay": 0,
+    "chorus": 0
+   },
+   "kind": "sub",
+   "note": "sine sub (removed by the engine in 0D–0E)",
+   "source": "synth",
+   "sources": [
+    "synthetic: sub (src/audio/synth/bank.ts) at 44100 Hz"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 36,
+    "v0Lufs": null,
+    "correctionDb": 0,
+    "targetLufs": null,
+    "lufs": -6.98,
+    "peakDb": -0.92,
+    "softClipped": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0,
+   "zones": [
+    {
+     "file": "11-sub.wav",
+     "rootMidi": 36,
+     "lo": 0,
+     "hi": 127,
+     "loopStart": 1,
+     "loopLength": 22286,
+     "loopType": 1,
+     "rate": 44172,
+     "lufs": -6.98
+    }
+   ]
+  },
+  {
+   "slot": 12,
+   "name": "kick",
+   "file": "12-kick.wav",
+   "rootMidi": 60,
+   "loopStart": 0,
+   "loopLength": 0,
+   "loopType": 0,
+   "volume": 64,
+   "panning": 128,
+   "fadeout": 0,
+   "unpitched": true,
+   "sends": {
+    "reverb": 0.04,
+    "delay": 0,
+    "chorus": 0
+   },
+   "kind": "sampled",
+   "note": "sine-sweep body + damped concert bass drum (skin, boom), saturated; natural on C-4",
+   "source": "sampled",
+   "sources": [
+    "synthetic sine-sweep body (bank v0 kick generator)",
+    "VSCO 2 CE Percussion/BDrumNewhit v6 (damped)"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms (LUFS, mono)",
+    "refMidi": 60,
+    "v0Lufs": -12.4,
+    "correctionDb": 0,
+    "targetLufs": -12.4,
+    "lufs": -12.4,
+    "peakDb": -1.36,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.003,
+   "zones": [
+    {
+     "file": "12-kick.wav",
+     "rootMidi": 60,
+     "lo": 0,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 22050,
+     "lufs": -12.4,
+     "v0Lufs": -12.4
+    }
+   ]
+  },
+  {
+   "slot": 13,
+   "name": "snare",
+   "file": "13-snare.wav",
+   "rootMidi": 60,
+   "loopStart": 0,
+   "loopLength": 0,
+   "loopType": 0,
+   "volume": 56,
+   "panning": 128,
+   "fadeout": 0,
+   "unpitched": true,
+   "sends": {
+    "reverb": 0.22,
+    "delay": 0,
+    "chorus": 0
+   },
+   "kind": "sampled",
+   "note": "acoustic snare (snares on) + rimshot crack + a touch of hand clap; natural on C-4",
+   "source": "sampled",
+   "sources": [
+    "VSCO 2 CE Percussion/Snare2-HitSN v9",
+    "VCSL Snare Drum Modern 3 rimshot v4 (−6 dB)",
+    "VCSL Claps (−13 dB)"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms (LUFS, mono)",
+    "refMidi": 60,
+    "v0Lufs": -21.7,
+    "correctionDb": 4,
+    "targetLufs": -17.7,
+    "lufs": -17.7,
+    "peakDb": -1.97,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0,
+    "why": "the v0 snare sat ≈9 dB under the kick at the composers' intended VOL balance (52 vs 60): +4 dB"
+   },
+   "attackSec": 0,
+   "zones": [
+    {
+     "file": "13-snare.wav",
+     "rootMidi": 60,
+     "lo": 0,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 32000,
+     "lufs": -17.7,
+     "v0Lufs": -21.7
+    }
+   ]
+  },
+  {
+   "slot": 14,
+   "name": "hats/cymbals",
+   "file": "14-metal-C4.wav",
+   "rootMidi": 60,
+   "loopStart": 0,
+   "loopLength": 0,
+   "loopType": 0,
+   "volume": 40,
+   "panning": 128,
+   "fadeout": 1024,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      3,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "unpitched": true,
+   "sends": {
+    "reverb": 0.12,
+    "delay": 0.04,
+    "chorus": 0
+   },
+   "kind": "sampled",
+   "note": "real cymbals: C-4 closed hat, D-4 pedal hat, E-4 open hat, F-4 crash (stick + clash cymbals), G-4 ride (stick + bell), A-4 reverse crash (1.92 s = 16 rows)",
+   "source": "sampled",
+   "sources": [
+    "VCSL Hi-Hat Cymbal (HitC v4, Close, HitO)",
+    "crash: VSCO 2 CE susCymb1 stick fff + VCSL Clash Cymbals 2 fff + VSCO 2 CE cymbal-crash1 ff",
+    "ride: VSCO 2 CE susCymb1 stick f + bell mf",
+    "reverse crash: the crash reversed"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms (LUFS, mono)",
+    "refMidi": 65,
+    "v0Lufs": -10.2,
+    "correctionDb": 3,
+    "targetLufs": -7.199999999999999,
+    "lufs": -8.53,
+    "peakDb": -0.18,
+    "softClipped": 0,
+    "limitedDb": 8.31,
+    "shortfallDb": 1.33,
+    "why": "crash +3 dB: the v0 crash \"fell flat\" at the S10 climax; reverse crash +1 dB with the bigger crash"
+   },
+   "attackSec": 0.001,
+   "zones": [
+    {
+     "file": "14-metal-C4.wav",
+     "rootMidi": 60,
+     "lo": 0,
+     "hi": 61,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 32000,
+     "lufs": -25.2,
+     "v0Lufs": -25.2
+    },
+    {
+     "file": "14-metal-D4.wav",
+     "rootMidi": 62,
+     "lo": 62,
+     "hi": 63,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 32000,
+     "lufs": -26,
+     "v0Lufs": -26
+    },
+    {
+     "file": "14-metal-E4.wav",
+     "rootMidi": 64,
+     "lo": 64,
+     "hi": 64,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 32000,
+     "lufs": -20.9,
+     "v0Lufs": -20.9
+    },
+    {
+     "file": "14-metal-F4.wav",
+     "rootMidi": 65,
+     "lo": 65,
+     "hi": 66,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 32000,
+     "lufs": -8.53,
+     "v0Lufs": -10.2
+    },
+    {
+     "file": "14-metal-G4.wav",
+     "rootMidi": 67,
+     "lo": 67,
+     "hi": 68,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 32000,
+     "lufs": -14.11,
+     "v0Lufs": -14
+    },
+    {
+     "file": "14-metal-A4.wav",
+     "rootMidi": 69,
+     "lo": 69,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 22050,
+     "lufs": -9.09,
+     "v0Lufs": -10
+    }
+   ]
+  },
+  {
+   "slot": 15,
+   "name": "timpani",
+   "file": "15-timpani-F3.wav",
+   "rootMidi": 53,
+   "loopStart": 0,
+   "loopLength": 0,
+   "loopType": 0,
+   "volume": 56,
+   "panning": 128,
+   "fadeout": 256,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      25,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "sends": {
+    "reverb": 0.28,
+    "delay": 0,
+    "chorus": 0
+   },
+   "kind": "sampled",
+   "note": "concert timpani, 4 zones E2 (the A2 drum a fourth down) / A2 / C3 / F3 at 22 kHz (pitch = principal mode), 0.95 s; tight onsets for R03 rolls",
+   "source": "sampled",
+   "sources": [
+    "VCSL Membranophones/Timpani 2 hits v5 (principal mode measured per drum)"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms (LUFS, mono)",
+    "refMidi": 53,
+    "v0Lufs": -17.1,
+    "correctionDb": 0,
+    "targetLufs": -17.1,
+    "lufs": -17.24,
+    "peakDb": -0.18,
+    "softClipped": 0,
+    "limitedDb": 2.44,
+    "shortfallDb": 0.14
+   },
+   "attackSec": 0,
+   "zones": [
+    {
+     "file": "15-timpani-E2.wav",
+     "rootMidi": 40,
+     "lo": 0,
+     "hi": 42,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 22086,
+     "lufs": -19.6,
+     "v0Lufs": -19.6
+    },
+    {
+     "file": "15-timpani-A2.wav",
+     "rootMidi": 45,
+     "lo": 43,
+     "hi": 46,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 22086,
+     "lufs": -16.9,
+     "v0Lufs": -16.9
+    },
+    {
+     "file": "15-timpani-C3.wav",
+     "rootMidi": 48,
+     "lo": 47,
+     "hi": 50,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 22086,
+     "lufs": -17.01,
+     "v0Lufs": -16.9
+    },
+    {
+     "file": "15-timpani-F3.wav",
+     "rootMidi": 53,
+     "lo": 51,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 22086,
+     "lufs": -17.24,
+     "v0Lufs": -17.1
+    }
+   ]
+  },
+  {
+   "slot": 16,
+   "name": "orchestra hit",
+   "file": "16-orchhit-A3.wav",
+   "rootMidi": 57,
+   "loopStart": 0,
+   "loopLength": 0,
+   "loopType": 0,
+   "volume": 56,
+   "panning": 128,
+   "fadeout": 512,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      15,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "chordTones": [
+    0,
+    12
+   ],
+   "sends": {
+    "reverb": 0.35,
+    "delay": 0.06,
+    "chorus": 0
+   },
+   "kind": "sampled",
+   "note": "tutti hit: spiccato strings + brass staccato (root and octave) + timpani + clash cymbal + bass drum, 2 zones F3/A3, 28 kHz, 0.7 s",
+   "source": "sampled",
+   "sources": [
+    "VSCO 2 CE spic strings (cello at root, violas + violins an octave up), F Horn / Tenor Trombone / Trumpet stac",
+    "VCSL Timpani 2 (an octave below)",
+    "VCSL Clash Cymbals 1 short",
+    "VSCO 2 CE concert bass drum"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms (LUFS, mono)",
+    "refMidi": 57,
+    "v0Lufs": -15.7,
+    "correctionDb": 1,
+    "targetLufs": -14.7,
+    "lufs": -14.7,
+    "peakDb": -1.36,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0,
+    "why": "orchestra hit +1 dB (S10 climax impact)"
+   },
+   "attackSec": 0.005,
+   "zones": [
+    {
+     "file": "16-orchhit-F3.wav",
+     "rootMidi": 53,
+     "lo": 0,
+     "hi": 55,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 28028,
+     "lufs": -14.7,
+     "v0Lufs": -15.7
+    },
+    {
+     "file": "16-orchhit-A3.wav",
+     "rootMidi": 57,
+     "lo": 56,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 28028,
+     "lufs": -14.7,
+     "v0Lufs": -15.7
+    }
+   ]
+  },
+  {
+   "slot": 17,
+   "name": "shepard",
+   "file": "17-shepard-C4.wav",
+   "rootMidi": 60,
+   "loopStart": 1,
+   "loopLength": 4052,
+   "loopType": 1,
+   "volume": 44,
+   "panning": 128,
+   "fadeout": 512,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      0
+     ],
+     [
+      13,
+      64
+     ],
+     [
+      43,
+      0
+     ]
+    ],
+    "sustain": 1
+   },
+   "sends": {
+    "reverb": 0.6,
+    "delay": 0,
+    "chorus": 0.2
+   },
+   "kind": "shepard",
+   "note": "Shepard tone: the note sets the pitch class only (play it in octave 4: C-4…B-4 then C-4 again rises forever)",
+   "source": "synth",
+   "sources": [
+    "synthetic: shepard (src/audio/synth/bank.ts) at 22050 Hz"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 60,
+    "v0Lufs": null,
+    "correctionDb": 0,
+    "targetLufs": null,
+    "lufs": -10.12,
+    "peakDb": -0.92,
+    "softClipped": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0,
+   "zones": [
+    {
+     "file": "17-shepard-C4.wav",
+     "rootMidi": 60,
+     "lo": 60,
+     "hi": 60,
+     "loopStart": 1,
+     "loopLength": 4052,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      0,
+      12,
+      24,
+      36,
+      48,
+      60,
+      72,
+      84,
+      96,
+      108,
+      120
+     ]
+    },
+    {
+     "file": "17-shepard-Cs4.wav",
+     "rootMidi": 61,
+     "lo": 61,
+     "hi": 61,
+     "loopStart": 1,
+     "loopLength": 3825,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      1,
+      13,
+      25,
+      37,
+      49,
+      61,
+      73,
+      85,
+      97,
+      109,
+      121
+     ]
+    },
+    {
+     "file": "17-shepard-D4.wav",
+     "rootMidi": 62,
+     "lo": 62,
+     "hi": 62,
+     "loopStart": 1,
+     "loopLength": 3610,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      2,
+      14,
+      26,
+      38,
+      50,
+      62,
+      74,
+      86,
+      98,
+      110,
+      122
+     ]
+    },
+    {
+     "file": "17-shepard-Ds4.wav",
+     "rootMidi": 63,
+     "lo": 63,
+     "hi": 63,
+     "loopStart": 1,
+     "loopLength": 3407,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      3,
+      15,
+      27,
+      39,
+      51,
+      63,
+      75,
+      87,
+      99,
+      111,
+      123
+     ]
+    },
+    {
+     "file": "17-shepard-E4.wav",
+     "rootMidi": 64,
+     "lo": 64,
+     "hi": 64,
+     "loopStart": 1,
+     "loopLength": 4288,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      4,
+      16,
+      28,
+      40,
+      52,
+      64,
+      76,
+      88,
+      100,
+      112,
+      124
+     ]
+    },
+    {
+     "file": "17-shepard-F4.wav",
+     "rootMidi": 65,
+     "lo": 65,
+     "hi": 65,
+     "loopStart": 1,
+     "loopLength": 4048,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      5,
+      17,
+      29,
+      41,
+      53,
+      65,
+      77,
+      89,
+      101,
+      113,
+      125
+     ]
+    },
+    {
+     "file": "17-shepard-Fs4.wav",
+     "rootMidi": 66,
+     "lo": 66,
+     "hi": 66,
+     "loopStart": 1,
+     "loopLength": 3820,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      6,
+      18,
+      30,
+      42,
+      54,
+      66,
+      78,
+      90,
+      102,
+      114,
+      126
+     ]
+    },
+    {
+     "file": "17-shepard-G4.wav",
+     "rootMidi": 67,
+     "lo": 67,
+     "hi": 67,
+     "loopStart": 1,
+     "loopLength": 3606,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      7,
+      19,
+      31,
+      43,
+      55,
+      67,
+      79,
+      91,
+      103,
+      115,
+      127
+     ]
+    },
+    {
+     "file": "17-shepard-Gs4.wav",
+     "rootMidi": 68,
+     "lo": 68,
+     "hi": 68,
+     "loopStart": 1,
+     "loopLength": 3404,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      8,
+      20,
+      32,
+      44,
+      56,
+      68,
+      80,
+      92,
+      104,
+      116
+     ]
+    },
+    {
+     "file": "17-shepard-A4.wav",
+     "rootMidi": 69,
+     "lo": 69,
+     "hi": 69,
+     "loopStart": 1,
+     "loopLength": 4016,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      9,
+      21,
+      33,
+      45,
+      57,
+      69,
+      81,
+      93,
+      105,
+      117
+     ]
+    },
+    {
+     "file": "17-shepard-As4.wav",
+     "rootMidi": 70,
+     "lo": 70,
+     "hi": 70,
+     "loopStart": 1,
+     "loopLength": 3790,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      10,
+      22,
+      34,
+      46,
+      58,
+      70,
+      82,
+      94,
+      106,
+      118
+     ]
+    },
+    {
+     "file": "17-shepard-B4.wav",
+     "rootMidi": 71,
+     "lo": 71,
+     "hi": 71,
+     "loopStart": 1,
+     "loopLength": 3578,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -10.12,
+     "keys": [
+      11,
+      23,
+      35,
+      47,
+      59,
+      71,
+      83,
+      95,
+      107,
+      119
+     ]
+    }
+   ]
+  },
+  {
+   "slot": 18,
+   "name": "scope",
+   "file": "18-scope.wav",
+   "rootMidi": 60,
+   "loopStart": 1,
+   "loopLength": 5487,
+   "loopType": 1,
+   "volume": 24,
+   "panning": 128,
+   "fadeout": 512,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      10,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "sends": {
+    "reverb": 0.2,
+    "delay": 0,
+    "chorus": 0
+   },
+   "kind": "scope",
+   "note": "oscilloscope voice for channel 17 (mono preview; the engine renders true XY)",
+   "source": "synth",
+   "sources": [
+    "synthetic: scope (src/audio/synth/bank.ts) at 22050 Hz"
+   ],
+   "level": {
+    "metric": "held-note loudness 0.5–3 s (LUFS, mono)",
+    "refMidi": 60,
+    "v0Lufs": null,
+    "correctionDb": 0,
+    "targetLufs": null,
+    "lufs": -6.42,
+    "peakDb": -0.92,
+    "softClipped": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0,
+   "zones": [
+    {
+     "file": "18-scope.wav",
+     "rootMidi": 60,
+     "lo": 0,
+     "hi": 127,
+     "loopStart": 1,
+     "loopLength": 5487,
+     "loopType": 1,
+     "rate": 22086,
+     "lufs": -6.42
+    }
+   ]
+  },
+  {
+   "slot": 19,
+   "name": "spiccato strings",
+   "file": "19-spiccato-B3.wav",
+   "rootMidi": 59,
+   "loopStart": 0,
+   "loopLength": 0,
+   "loopType": 0,
+   "volume": 50,
+   "panning": 128,
+   "fadeout": 1024,
+   "volEnv": {
+    "points": [
+     [
+      0,
+      64
+     ],
+     [
+      4,
+      0
+     ]
+    ],
+    "sustain": 0
+   },
+   "sends": {
+    "reverb": 0.3,
+    "delay": 0.04,
+    "chorus": 0.06
+   },
+   "kind": "sampled",
+   "note": "section spiccato (cello / viola / violin, two round robins stacked) for ostinati, 5 zones E2…G5, 28 kHz, one-shot ≈0.35 s",
+   "source": "sampled",
+   "sources": [
+    "VSCO 2 CE Strings: Cello / Viola / Violin Section spic v2, rr1 + rr2 stacked"
+   ],
+   "level": {
+    "metric": "momentary max 400 ms (LUFS, mono)",
+    "refMidi": 59,
+    "v0Lufs": -18.1,
+    "correctionDb": 0,
+    "targetLufs": -18.1,
+    "lufs": -18.1,
+    "peakDb": -1.28,
+    "softClipped": 0,
+    "limitedDb": 0,
+    "shortfallDb": 0
+   },
+   "attackSec": 0.083,
+   "zones": [
+    {
+     "file": "19-spiccato-E2.wav",
+     "rootMidi": 40,
+     "lo": 0,
+     "hi": 45,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 28028,
+     "lufs": -20.5,
+     "v0Lufs": -20.5
+    },
+    {
+     "file": "19-spiccato-D3.wav",
+     "rootMidi": 50,
+     "lo": 46,
+     "hi": 54,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 28028,
+     "lufs": -18.1,
+     "v0Lufs": -18.1
+    },
+    {
+     "file": "19-spiccato-B3.wav",
+     "rootMidi": 59,
+     "lo": 55,
+     "hi": 64,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 28028,
+     "lufs": -18.1,
+     "v0Lufs": -18.1
+    },
+    {
+     "file": "19-spiccato-A4.wav",
+     "rootMidi": 69,
+     "lo": 65,
+     "hi": 74,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 28028,
+     "lufs": -16.6,
+     "v0Lufs": -16.6
+    },
+    {
+     "file": "19-spiccato-G5.wav",
+     "rootMidi": 79,
+     "lo": 75,
+     "hi": 127,
+     "loopStart": 0,
+     "loopLength": 0,
+     "loopType": 0,
+     "rate": 28028,
+     "lufs": -17,
+     "v0Lufs": -17
+    }
+   ]
+  }
+ ]
+}
