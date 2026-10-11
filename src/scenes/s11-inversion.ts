@@ -167,8 +167,31 @@ export function createInversion(g: Gfx): Scene {
   const plane = program(g, 'scenes/s11-plane');
   const worldP = program(g, 'scenes/s11-world');
   const arcs = program(g, 'scenes/s11-arcs', 'scenes/s11-arcs.vert');
+  const mosProg = program(g, 'scenes/s11-mos');
+  const heightP = program(g, 'scenes/s11-height');
   let worldT: Target | null = null;
   let dummy: WebGLTexture | null = null; // bound to s10coef when S10 never rendered
+  // S10's mosaic as a mipmapped 40×25 texture (built once from S10's last coefficients)
+  let mosTex: WebGLTexture | null = null, mosFb: WebGLFramebuffer | null = null, mosFrom = -1;
+  // and the blocks' heights (r: own, g: the 3×3 maximum — the march's bound), from that mosaic
+  let htTex: WebGLTexture | null = null, htFb: WebGLFramebuffer | null = null;
+  const buildMosaic = (coef: WebGLTexture, s10on: number, back: Target | null) => {
+    if (!mosProg.use() || !mosFb) return;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, mosFb);
+    gl.viewport(0, 0, 40, 25);
+    gl.disable(gl.BLEND);
+    mosProg.tex('s10coef', coef, 0);
+    fullscreen(g);
+    gl.bindTexture(gl.TEXTURE_2D, mosTex);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    if (heightP.use() && htFb) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, htFb);
+      gl.viewport(0, 0, 40, 25);
+      heightP.tex('mosT', mosTex, 0).set('s10on', s10on);
+      fullscreen(g);
+    }
+    bindTarget(g, back);
+  };
   const C17 = carlyle(17), C257 = carlyle(257);
   const MAXC = 136;
   const Cu = new Float32Array(MAXC * 4), Cs = new Float32Array(MAXC * 4);
@@ -208,17 +231,36 @@ export function createInversion(g: Gfx): Scene {
         bloom: 0.1 + (0.03 - 0.1) * k,
         bloomRadius: 1.1 - 0.1 * k,
         vignette: 0.22 * k,
-        grain: 0.035 - 0.005 * k,
+        grain: o10.grain ?? 0.035 - 0.005 * k,
         ca: Math.max(1.5 * (1 - k), 3 * tear),
       };
     },
-    programs: () => [plane, worldP, arcs],
+    programs: () => [plane, worldP, arcs, mosProg, heightP],
     init() {
       dummy = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, dummy);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array(4));
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      mosTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, mosTex);
+      gl.texStorage2D(gl.TEXTURE_2D, 6, gl.RGBA16F, 40, 25);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+      mosFb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, mosFb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, mosTex, 0);
+      htTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, htTex);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, 40, 25);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      htFb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, htFb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, htTex, 0);
+      buildMosaic(dummy!, 0, null); // warms their pipelines and the mipmap path (and is the fallback city)
       // first draws build the Metal pipelines (20–100 ms each): do them now, into a tiny target of the
       // same format, so neither 16:00 (world) nor 16:32 (plane) stutters
       const warm = ensureTarget(g, null, 4, 4, { formats: [gl.RGBA16F] });
@@ -227,7 +269,7 @@ export function createInversion(g: Gfx): Scene {
       const tp = tileParams(3);
       if (worldP.use()) {
         worldP.set('res', 4, 4).set('ro', [0, 2, 4]).set('cam', [1, 0, 0, 0, 1, 0, 0, 0, -1]).set('focal', 1).set('kappa', 0.02)
-          .set('hk', 1).set('Sg', Sg).set('T', tp.T).set('p', 3).set('wash', [1, 1, 1]).tex('s10coef', dummy, 1);
+          .set('hk', 1).set('Sg', Sg).set('T', tp.T).set('p', 3).set('wash', [1, 1, 1]).tex('mosT', mosTex, 2).tex('hT', htTex, 3);
         fullscreen(g);
       }
       const warm2 = ensureTarget(g, null, 4, 4, { formats: [gl.RGBA16F] });
@@ -263,6 +305,8 @@ export function createInversion(g: Gfx): Scene {
       const lead = leadAll && leadAll.length ? leadAll : LEAD_FALLBACK;
 
       const p = o.p ?? pAt(r, mk);
+      // how fast p flows (log speed per row): the tiles' colours crossfade only while it moves
+      const flowK = o.p !== undefined ? 0 : smoothstep(0, 0.04, Math.abs(Math.log(pAt(r + 0.25, mk) / pAt(r - 0.25, mk))) / 0.5);
       const tp = tileParams(p);
       tear = Math.min(1, Math.abs(p - Math.round(p)) * 4) * (p < 40 ? 1 : 0.4);
       const spin = spinAt(r, mk);
@@ -273,6 +317,10 @@ export function createInversion(g: Gfx): Scene {
       const m10 = s10Mosaic();
       const s10tex = m10?.tex ?? dummy;
       const s10on = m10 ? 1 : 0;
+      if (m10 && m10.t !== mosFrom) {
+        buildMosaic(m10.tex, 1, hdr);
+        mosFrom = m10.t;
+      }
       const rawRows = o.raw ?? RAW_ROWS;
       const raw = s10on && r < rawRows ? 1 : 0;
       // (always allocated: the plane's sampler must never fall back to the bound hdr target)
@@ -303,7 +351,9 @@ export function createInversion(g: Gfx): Scene {
             .set('vigK', 1 - smoothstep(0, 8, r))
             .set('gK', smoothstep(0.5, 5, r))
             .set('fogK', smoothstep(0, 8, r))
-            .tex('s10coef', s10tex, 1);
+            .set('lodOn', o.nolod ? 0 : 1)
+            .tex('mosT', mosTex, 2)
+            .tex('hT', htTex, 3);
           fullscreen(g);
         }
         bindTarget(g, hdr);
@@ -382,6 +432,7 @@ export function createInversion(g: Gfx): Scene {
         .set('p', p)
         .set('bound', tp.bound)
         .set('tileK', 1)
+        .set('flowK', flowK)
         .set('wash', washAt(r, mk))
         .set('worldMix', worldMix)
         .set('poly', poly257)

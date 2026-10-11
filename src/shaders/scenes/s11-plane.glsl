@@ -17,6 +17,7 @@ uniform vec4 T;            // tiling (see lib/hyper)
 uniform float p;
 uniform float bound;       // hyperbolic boundary radius in chart units (0: none)
 uniform float tileK;       // tiling strength
+uniform float flowK;       // 0 while p rests … 1 while it flows (the sector colours crossfade)
 uniform vec3 wash;         // paint strength of the tiles by generation 1, 2, ≥3
 uniform sampler2D world;   // the inverted 3D world (S11 part 1), linear
 uniform float worldMix;
@@ -62,11 +63,23 @@ vec3 tiling(vec2 q) {
   float tilePx = 1.0 / tl.sc / upx;                         // ≈ size of this tile on screen, px
   vec3 c = paper();
   if (tl.gen > 0.5) {
-    float th = atan(tl.ctr.y, tl.ctr.x);
-    float kt = floor(mod(th / T.x + 0.3, p));
-    float idx = mod(kt + tl.gen - 1.0, 3.0);
-    float a = tl.gen < 1.5 ? wash.x : tl.gen < 2.5 ? wash.y : wash.z;
-    c = paint(byrne(idx), a * tileK);
+    // a tile's colour: its sector around the centre (and its generation). While p flows the sectors
+    // turn and new ones open at every integer p, so a tile would change colour in one frame — whole
+    // thirds of the screen at once; instead the colours crossfade across the sector boundaries
+    // (symmetrically, so continuously in space and time), and only while p moves.
+    float xm = mod(atan(tl.ctr.y, tl.ctr.x) / T.x + 0.3, p);
+    float k = floor(xm);
+    float up = min(k + 1.0, p);                     // the last sector is partial
+    float kn = up >= p ? 0.0 : k + 1.0, kp = k > 0.5 ? k - 1.0 : ceil(p) - 1.0;
+    float bw = 0.3 * flowK;
+    float wU = bw > 0.0 ? 0.5 * (1.0 - smoothstep(0.0, bw, up - xm)) : 0.0;
+    float wL = bw > 0.0 ? 0.5 * (1.0 - smoothstep(0.0, bw, xm - k)) : 0.0;
+    float a = (tl.gen < 1.5 ? wash.x : tl.gen < 2.5 ? wash.y : wash.z) * tileK;
+    float g1 = tl.gen - 1.0;
+    // (glazed: one wash over the other, the geometric mix that paint() lays on the paper)
+    vec3 pp = paper();
+    c = pp * pow(max(byrne(mod(k + g1, 3.0)), 1e-4) / pp, vec3(a * (1.0 - wU - wL))) *
+        pow(max(byrne(mod(kn + g1, 3.0)), 1e-4) / pp, vec3(a * wU)) * pow(max(byrne(mod(kp + g1, 3.0)), 1e-4) / pp, vec3(a * wL));
   }
   // edges: ink lines of constant screen width; tiny tiles fade to the paper
   float lod = smoothstep(2.0, 8.0, tilePx);
