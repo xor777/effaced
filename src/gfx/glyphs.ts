@@ -10,6 +10,8 @@
 //   wordPolylines(step)       the ink strokes of EFFACED in the word frame, tagged with the letter index 0..6
 //   sampleWord(n, rand)       n points spread evenly (by length) over the strokes of EFFACED, jittered across
 //                             the pen: Float32Array of [x, y, letterIndex, random] × n
+//   sampleWordStrokes(n, rand)  the same spread, as stroke parameters for shaders that move points along the
+//                             pen: [primitive (global index into GLY_D), u ∈ 0..1 along it, letterIndex, random] × n
 //   GLYPHS_GLSL               the GLSL source, for shaders not built through the engine's #include
 
 import GLYPHS_GLSL from '../shaders/lib/glyphs.glsl?raw';
@@ -106,6 +108,25 @@ export function sampleWord(n: number, rand: () => number = Math.random): Float32
     const [x, y, nx, ny] = inkAt(st.p, t);
     const off = (rand() * 2 - 1) * STROKE * 0.9;
     out.set([x + nx * off + WORD.x[st.k], y + ny * off - 0.5, st.k, rand()], i * 4);
+  }
+  return out;
+}
+
+/** n stroke parameters spread evenly by length over EFFACED: [global primitive index, u, letter 0..6, random] */
+export function sampleWordStrokes(n: number, rand: () => number = Math.random): Float32Array {
+  const strokes = WORD.letters.flatMap((L, k) => {
+    const li = LETTERS.indexOf(L);
+    return GLYPHS[L].map((p, j) => ({ p, k, g: R[2 * li] + j })).filter((x): x is { p: Ink; k: number; g: number } => isInk(x.p))
+      .map((x) => ({ ...x, len: inkLength(x.p) }));
+  });
+  const total = strokes.reduce((a, s) => a + s.len, 0);
+  const out = new Float32Array(n * 4);
+  let si = 0, acc = strokes[0].len;
+  for (let i = 0; i < n; i++) {
+    const s = ((i + rand()) / n) * total;
+    while (s > acc && si < strokes.length - 1) acc += strokes[++si].len;
+    const st = strokes[si];
+    out.set([st.g, Math.min(1, Math.max(0, 1 - (acc - s) / st.len)), st.k, rand()], i * 4);
   }
   return out;
 }
