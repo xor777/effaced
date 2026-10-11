@@ -96,7 +96,9 @@ vec3 tiling(vec2 q) {
 // last roots 2·cos(2πk/n) up to the circle, the vertices, the edges drawn in order around the circle
 vec3 polygon(vec3 c, vec2 q, float U, float w, vec4 P, float pa) {
   float n = P.x;
-  if (n < 3.0) return c;
+  // nothing to draw, or nothing near: every stroke lies on or inside the circle (radius R), the vertex
+  // dots reach 2.4w beyond it — most of the screen skips the ~10 trig calls below
+  if (n < 3.0 || (P.w <= 0.0 && pa <= 0.0) || dot(q, q) > (R + 3.0 * w + 2.0) * (R + 3.0 * w + 2.0)) return c;
   vec2 x = q / U;
   float sect = TAU / n;
   float th = mod(atan(q.y, q.x), TAU);
@@ -109,6 +111,9 @@ vec3 polygon(vec3 c, vec2 q, float U, float w, vec4 P, float pa) {
     float dl = segDist(x, vec2(vk.x, -vk.y * grow), vec2(vk.x, vk.y * grow)) * U;
     c = mix(c, byrne(mod(k, 3.0)), pa * ink(dl, 0.6 * w));
   }
+  // the vertices and edges lie in the thin ring between the edges' midpoints and the circle
+  float rIn = max(R * cos(0.5 * sect) - 3.0 * w - 2.0, 0.0);
+  if (dot(q, q) < rIn * rIn) return c;
   float kv = floor(th / sect + 0.5);
   c = mix(c, INK, P.w * ink(length(q - R * vec2(cos(kv * sect), sin(kv * sect))), 2.4 * w));
   float ke = floor(th / sect);

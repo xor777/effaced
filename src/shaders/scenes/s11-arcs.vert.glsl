@@ -9,10 +9,10 @@ uniform int mode;
 uniform float spin;         // the page turns (see s11-plane)
 uniform vec4 C[136];       // centre (units), radius (units), sweep 0..1
 uniform vec4 Cs[136];      // start angle, colour index, alpha, roots alpha
+uniform int seg;           // segments per ribbon (the draw issues 2·(seg + 1) vertices)
 out vec2 vP;
 out vec4 vCirc;            // centre px, radius px, alpha
 flat out vec2 vInfo;       // colour index, mode
-const int SEG = 512;
 
 void main() {
   vec4 ci = C[gl_InstanceID], cs = Cs[gl_InstanceID];
@@ -20,7 +20,7 @@ void main() {
   if (mode == 0) {
     int s = gl_VertexID >> 1;
     float side = (gl_VertexID & 1) == 0 ? -1.0 : 1.0;
-    float th = cs.x + ci.w * TAU * float(s) / float(SEG);
+    float th = cs.x + ci.w * TAU * float(s) / float(seg);
     p = (ci.xy + ci.z * vec2(cos(th), sin(th))) * U + side * (hw + 2.0) * vec2(cos(th), sin(th));
     vCirc = vec4(ci.xy * U, ci.z * U, cs.z);
     if (ci.w <= 0.0 || cs.z <= 0.0) p = vec2(1e6);

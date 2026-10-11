@@ -206,6 +206,22 @@ export function createInversion(g: Gfx): Scene {
   const S3 = tileParams(3).S;
   const Lf = S3 * Sg;
 
+  // the score's events, in rows from 16:00 — they depend only on the rendered score, so they are
+  // filtered once per f.audio (filtering ~5000 notes every frame is garbage, and GC hitches)
+  const UNSET = {};
+  let evFrom: unknown = UNSET;
+  let mk: number[] = [0, 32, 64, 96];
+  let notes17: number[] = [];
+  const events = (audio: FrameCtx['audio']) => {
+    if (audio === evFrom) return;
+    evFrom = audio;
+    mk = markerTimes(audio, 'D-4', START, START + LEN, [0, 32, 64, 96].map((x) => START + x)).map((x) => x / ROW - START);
+    while (mk.length < 4) mk.push([0, 32, 64, 96][mk.length]);
+    const leadAll = audio?.notes?.filter((n) => n.ch === CH.lead && n.grow >= START && n.grow < START + LEN).map((n) => n.t / ROW - START);
+    const lead = leadAll && leadAll.length ? leadAll : LEAD_FALLBACK;
+    notes17 = lead.filter((x) => x >= mk[1] + 2 && x < mk[2]);
+  };
+
   /** p over the scene: integer plateaus, flowing (and tearing) after each D-4 marker */
   function pAt(r: number, m: number[]): number {
     const lg = (a: number, b: number, k: number) => Math.exp(Math.log(a) + (Math.log(b) - Math.log(a)) * k);
@@ -281,7 +297,7 @@ export function createInversion(g: Gfx): Scene {
       if (arcs.use()) {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-        arcs.set('res', 4, 4).set('U', 1).set('hw', 1).set('mode', 0);
+        arcs.set('res', 4, 4).set('U', 1).set('hw', 1).set('mode', 0).set('seg', 1);
         gl.bindVertexArray(g.vao);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, 1);
         gl.disable(gl.BLEND);
@@ -298,11 +314,8 @@ export function createInversion(g: Gfx): Scene {
       const W = hdr!.w, H = hdr!.h;
       const Rpx = 500 * (H / 1890);
 
-      // markers (rows from 16:00) and the lead's notes
-      const mk = markerTimes(f.audio, 'D-4', START, START + LEN, [0, 32, 64, 96].map((x) => START + x)).map((x) => x / ROW - START);
-      while (mk.length < 4) mk.push([0, 32, 64, 96][mk.length]);
-      const leadAll = f.audio?.notes?.filter((n) => n.ch === CH.lead && n.grow >= START && n.grow < START + LEN).map((n) => n.t / ROW - START);
-      const lead = leadAll && leadAll.length ? leadAll : LEAD_FALLBACK;
+      // markers (rows from 16:00) and the lead's notes: once per rendered score, not per frame
+      events(f.audio);
 
       const p = o.p ?? pAt(r, mk);
       // how fast p flows (log speed per row): the tiles' colours crossfade only while it moves
@@ -368,7 +381,6 @@ export function createInversion(g: Gfx): Scene {
       let penOn = 0;
       // the 17-gon's circles: one per lead note after 16:32 (the seven notes of bars 3–4), each sweeping
       // until the next note so the compass never rests; the 257-gon's whirl: level by level
-      const notes17 = lead.filter((x) => x >= mk[1] + 2 && x < mk[2]);
       const fill = (set: Carlyle[], isBig: boolean, cu: Float32Array, cs: Float32Array) => {
         for (let i = 0; i < set.length; i++) {
           const c = set[i];
@@ -407,7 +419,7 @@ export function createInversion(g: Gfx): Scene {
         smoothstep(t0 + 1, t0 + 4, r) * (isBig ? 0.6 : 1),
       ];
       const tPoly = mk[3] + 14;
-      const poly17 = polyAt(17, mk[2], false).map((v, i) => (i === 3 ? v * fade17 : v));
+      const poly17 = fade17 > 0 ? polyAt(17, mk[2], false).map((v, i) => (i === 3 ? v * fade17 : v)) : [0, 0, 0, 0];
       const poly257 = big ? polyAt(257, tPoly, true) : [0, 0, 0, 0];
       // between circles the pen draws the polygon: its tip moves on round the circle
       for (const [P, n] of [[poly17, 17], [poly257, 257]] as [number[], number][]) {
@@ -452,14 +464,17 @@ export function createInversion(g: Gfx): Scene {
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.bindVertexArray(g.vao);
         arcs.set('res', W, H).set('U', Rpx / 2).set('spin', spin);
-        const draw = (cu: Float32Array, cs: Float32Array, count: number, hw: number) => {
+        // segments per ribbon: 256 keep even the largest circle (the 257-gon's first, r ≈ 8100 px) within
+        // its ribbon's 2 px margin (sagitta 0.75 px); the 17-gon's bolder circles keep 512
+        const draw = (cu: Float32Array, cs: Float32Array, count: number, hw: number, seg: number) => {
           arcs.set('hw', hw * (H / 1890)).set('C', cu).set('Cs', cs).set('mode', 0);
-          gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, (512 + 1) * 2, count);
+          arcs.set('seg', seg);
+          gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, (seg + 1) * 2, count);
           arcs.set('mode', 1);
           gl.drawArraysInstanced(gl.TRIANGLES, 0, 12, count);
         };
-        if (fade17 > 0) draw(Cu17, Cs17, C17.length, 2.0);
-        if (big) draw(Cu, Cs, Math.min(MAXC, C257.length), 1.2);
+        if (fade17 > 0) draw(Cu17, Cs17, C17.length, 2.0, 512);
+        if (big) draw(Cu, Cs, Math.min(MAXC, C257.length), 1.2, 256);
         gl.bindVertexArray(null);
         gl.disable(gl.BLEND);
       }
