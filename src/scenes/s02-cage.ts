@@ -155,7 +155,13 @@ function cageCamera(face: [number, number, number], V: V4[], t: number, aspect: 
 
 function startNdc(idx: number[], aspect: number): [number, number][] {
   const { V, face } = GEO!;
-  const { qL, qR, view, proj } = cageCamera(face, V, 0, aspect);
+  return ndcAt(idx, cageCamera(face, V, 0, aspect));
+}
+
+/** NDC of cage vertices under a camera */
+function ndcAt(idx: number[], cam: ReturnType<typeof cageCamera>): [number, number][] {
+  const { V } = GEO!;
+  const { qL, qR, view, proj } = cam;
   const m = mat4.multiply(mat4.create(), proj, view);
   return idx.map((i) => {
     const p = project(V[i], qL, qR);
@@ -220,7 +226,8 @@ export function createCage(g: Gfx): Scene {
       const t = f.local;
       // 4D: a slow isoclinic double rotation that speeds up as the scene goes on; the camera starts
       // square on the face (where S01 lands its triangle), pulls back and orbits
-      const { qL, qR, view, proj } = cageCamera(face, V, t, hdr!.w / hdr!.h);
+      const cam = cageCamera(face, V, t, hdr!.w / hdr!.h);
+      const { qL, qR, view, proj } = cam;
 
       // the wireframe fills into a TPMS lattice, which then turns out to be behind CRT glass
       const lattice = smoothstep(7.5, 10.5, t);
@@ -286,7 +293,10 @@ export function createCage(g: Gfx): Scene {
           .set('qL', qL)
           .set('qR', qR)
           .set('k', 0.62 * faceK)
-          .set('curve', curve);
+          .set('curve', curve)
+          .set('res', hdr!.w, hdr!.h);
+        const [nA, nB, nC] = ndcAt(rgb, cam);
+        faceProg.set('sA', nA).set('sB', nB).set('sC', nC);
         gl.drawArrays(gl.TRIANGLES, 0, 32 * 33 * 3);
       }
       if (edgeProg.use() && vao) {

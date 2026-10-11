@@ -19,7 +19,7 @@ import {
  * cycles through them like a real sign — the old line flickers out, a moment of dark stone, the new
  * one flickers on — at the lead notes nearest CREDIT_CUES. They share one letter size and tablet.
  */
-export const CREDITS = ['EFFACED', 'code — opus', 'music — opus, xor777', 'gfx — opus, xor777'];
+export const CREDITS = ['EFFACED', 'code  opus', 'music  opus, xor777', 'gfx  opus, xor777'];
 /** [position, row] at which each credit line comes on (snapped to the nearest lead note) */
 const CREDIT_CUES: [number, number][] = [
   [0x05, 48], // seen through the title gate's arch as we approach it
