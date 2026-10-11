@@ -7,8 +7,9 @@
 // add up and the "stopped" picture keeps moving. 12:32 the render returns — slowly: the inks begin to creep
 // that same way, light and depth come in — and from 13:00 (E-4) the same fibration is alive in 3D —
 // now the inks really flow along the fibres — and a depth-of-field pass (Vogel-spiral gather) sweeps
-// through it: the picture is a hybrid image, HP(fibres) + LP(a face with closed eyes). In focus there
-// is only mathematics; out of focus the fibres average out and the face is all that is left.
+// through it: the picture is a hybrid image, HP(fibres) + LP(the creature's word EFFACED, in its own
+// glyphs). In focus there is only mathematics; out of focus the fibres average out and the word is all
+// that is left — a hint here, the answer in S14, which writes the same word in embers.
 
 import { mat4 } from 'gl-matrix';
 import { type Gfx, type Target, type Program, program, ensureTarget, bindTarget, fullscreen } from '../gfx/gl.ts';
@@ -17,10 +18,8 @@ import { smoothstep } from '../timeline/events.ts';
 import { ROW, ROWS } from '../timeline/script.ts';
 import { CH } from '../music/roster.ts';
 import { frameCounter, tickFrameCounter } from '../meta/overlay.ts';
-import { COMMON } from '../perception/shaders/common.glsl.ts';
-import { FACE_LIB } from '../perception/shaders/face.glsl.ts';
 import { defaults } from '../perception/params.ts';
-import { faceDesignUniforms, lilacColors } from '../perception/render.ts';
+import { lilacColors } from '../perception/render.ts';
 import { toBuffer, hex2rgb } from '../perception/color.ts';
 import { FLOW } from './s08-flow.ts';
 
@@ -73,29 +72,18 @@ export function createStillness(g: Gfx): Scene {
   const dof = program(g, 'scenes/s09-dof');
   const blur = program(g, 'scenes/s09-blur');
   const hybrid = program(g, 'scenes/s09-hybrid');
-  const face = program(
-    g,
-    COMMON + FACE_LIB + /* glsl */ `
-in vec2 uv;
-out vec4 o;
-uniform vec2 center;
-uniform float scale;
-void main() {
-  vec2 q = (gl_FragCoord.xy - 0.5 * res) / res.y;
-  pxF = 1.0 / (res.y * scale);
-  vec2 p = (q - center) / scale;
-  // only the head: the neck and the shoulders fade out where the fibration ends
-  o = vec4(faceDesign(p) * (1.0 - smoothstep(0.5, 0.85, length(p * vec2(0.95, 0.8) - vec2(0.0, 0.05)))), 0.0, 0.0, 1.0);
-}`,
-  );
+  const word = program(g, 'scenes/s09-word');
 
-  // perception-lab parameters: S08's field and cross, the face and its hybrid settings
+  // perception-lab parameters: S08's field and cross
   const P = defaults();
   const lc = lilacColors(P.lilac, 'display-p3');
   const inks = ['#000000', '#6E5FA8', '#FFFFFF', '#BEADED'].map((h) => toBuffer(hex2rgb(h), 'srgb', 'display-p3'));
   const lin = (h: string) => toBuffer(hex2rgb(h), 'srgb', 'display-p3');
   const tints = ['#EFFACE', '#FACADE', '#BEADED', '#ACCEDE'].map(lin).flat();
-  const faceBase = lin('#DECADE');
+  const wordLight = lin('#DECADE');
+  // the word: cap height (H) — EFFACED is 7.8 caps wide, so 0.13 H spans ~1 H, inside the fibration —
+  // the pen's half-width and softness, the reach of its glow (caps); the field and word luminances
+  const LOW = { cap: 0.13, pen: [0.11, 0.1, 0.45], ab: [0.07, 0.16] };
   const bgDark = lin('#0C0B0E');
 
   // fibres
@@ -112,12 +100,12 @@ void main() {
   let msW = 0, msH = 0;
   let resolved: Target | null = null, accT: Target | null = null, halfT: Target | null = null;
   let q0: Target | null = null, q1: Target | null = null, q2: Target | null = null, q3: Target | null = null;
-  let faceT: Target | null = null;
+  let lowT: Target | null = null;
   let stillDrawn = false;
   let warmed = false;
   const view = mat4.create(), proj = mat4.create(), vp = mat4.create();
   // dev / calibration (PLAN §5): __s09.blur = 0…1 holds the defocus, .hk the hybrid exchange,
-  // .show = 'face' | 'lp' | 'q1' | 'sharp' displays an intermediate buffer
+  // .show = 'low' | 'lp' | 'q1' | 'sharp' displays an intermediate buffer
   // .freezeRows = how long the render stays stopped (rows after 12:00)
   const dbg: { show: string; blur: number | null; hk: number | null; freezeRows: number } = { show: '', blur: null, hk: null, freezeRows: 32 };
   if (import.meta.env.DEV) (globalThis as any).__s09 = dbg;
@@ -302,7 +290,7 @@ void main() {
       const k = smoothstep(tm.awake, tm.awake + 28 * ROW, f.t);
       return { tonemap: 'clip', exposure: 0, bloom: 0.13 * k, bloomRadius: 1.1, vignette: 0.35 * k, grain: 0.03 * k, ca: 0 };
     },
-    programs: () => [tube, acc, still, down, dof, blur, hybrid, face],
+    programs: () => [tube, acc, still, down, dof, blur, hybrid, word],
     init() {
       vao = gl.createVertexArray();
       vbo = gl.createBuffer();
@@ -332,23 +320,13 @@ void main() {
       halfT = ensureTarget(g, halfT, Math.ceil(w / 2), Math.ceil(h / 2), { formats: [gl.RGBA16F], depth: true });
       const qw = Math.ceil(w / QSCALE), qh = Math.ceil(h / QSCALE);
       const qspec = { formats: [gl.RGBA16F] };
-      const freshFace = !faceT || faceT.w !== qw || faceT.h !== qh;
+      const freshLow = !lowT || lowT.w !== qw || lowT.h !== qh;
       q0 = ensureTarget(g, q0, qw, qh, qspec);
       q1 = ensureTarget(g, q1, qw, qh, qspec);
       q2 = ensureTarget(g, q2, qw, qh, qspec);
       q3 = ensureTarget(g, q3, qw, qh, qspec);
-      faceT = ensureTarget(g, faceT, qw, qh, qspec);
-      if (freshFace) {
-        // the face (eyes closed), low-passed analytically: every contour is an erf edge of sigma lowSigma
-        const fu = faceDesignUniforms({ ...P.face, eyesOpen: false });
-        pass(face, faceT, (p) => {
-          p.set('res', qw, qh).set('dither', 0).set('center', 0, 0.02).set('scale', 0.6);
-          // only the head: no nimbus, no 65537-gon ring, no garment (their low frequencies would show
-          // where no fibre masks them)
-          p.set('featK', 1).set('modelling', 1).set('tones', fu.tones[0], 0, 0, 0).set('strands', 0);
-          p.set('edgeS', P.hybrid.lowSigma).set('featS', P.hybrid.lowSigma).set('frame', fu.frame).set('eyesOpen', 0);
-        });
-      }
+      lowT = ensureTarget(g, lowT, qw, qh, qspec);
+      if (freshLow) pass(word, lowT, (p) => p.set('res', qw, qh).set('cap', LOW.cap).set('pen', LOW.pen));
 
       const frozen = f.t >= tm.freeze && f.t < tm.awake;
       if (frozen || !warmed) {
@@ -400,21 +378,21 @@ void main() {
           .tex('sharp', src.tex[0], 0)
           .tex('dofQ', q1!.tex[0], 1)
           .tex('lpQ', q3!.tex[0], 2)
-          .tex('faceQ', faceT!.tex[0], 3)
+          .tex('lowQ', lowT!.tex[0], 3)
           .set('res', hdr!.w, hdr!.h)
           .set('coc', coc)
           .set('dofAll', dofAll)
           .set('hk', dbg.hk ?? smoothstep(14, 40, rw))
-          .set('base', faceBase)
-          .set('faceAB', 0.008, 0.26)
+          .set('base', wordLight)
+          .set('lowAB', LOW.ab)
           .set('tm', wake)
           .set('gain', 1 + 0.18 * wake * (f.S[CH.kick - 1] ?? 0))
           .set('crossSz', P.lilac.crossSize, P.lilac.crossThickness)
           .set('crossCol', [...lc.cross, 1 - smoothstep(4, 20, rw)]),
       );
       if (dbg.show) {
-        const src = { face: faceT, q0, q1, lp: q3, sharp: resolved }[dbg.show];
-        if (src) pass(acc, hdr!, (p) => p.tex('src', src.tex[0], 0).set('w', dbg.show === 'face' ? 0.6 : 1));
+        const src = { low: lowT, q0, q1, lp: q3, sharp: resolved }[dbg.show];
+        if (src) pass(acc, hdr!, (p) => p.tex('src', src.tex[0], 0).set('w', dbg.show === 'low' ? 0.6 : 1));
       }
       warmed = true;
     },

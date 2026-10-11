@@ -1,8 +1,8 @@
-// S09 · the hybrid image (Oliva, Torralba, Schyns): high-pass of the (defocused) fibration + low-pass
-// of a face with closed eyes, in the log domain (so colours keep their chroma): the fibres' own low
-// frequencies — their local mean luminance — are divided out and the face's multiplied in,
-// log C − log LP(C) + log LP(face). In focus the fine fibres dominate and mask the soft shading;
-// defocused, C → LP(C) and only the face is left. hk fades the exchange in.
+// S09 · the hybrid image (Oliva, Torralba, Schyns): high-pass of the (defocused) fibration + low-pass of
+// the creature's word EFFACED, in the log domain (so colours keep their chroma): the fibres' own low
+// frequencies — their local mean luminance — are divided out and the word's light multiplied in,
+// log C − log LP(C) + log LP(word). In focus the fine fibres dominate and mask the soft shading;
+// defocused, C → LP(C) and only the word is left. hk fades the exchange in.
 #include "lib/common"
 #include "lib/color"
 in vec2 uv;
@@ -10,13 +10,13 @@ out vec4 o;
 uniform sampler2D sharp; // rgb, a = 1 / depth (full)
 uniform sampler2D dofQ;  // defocused (quarter), a = CoC (quarter px)
 uniform sampler2D lpQ;   // gaussian of dofQ (quarter)
-uniform sampler2D faceQ; // the face's design value V, already low-passed (quarter)
+uniform sampler2D lowQ;  // the low-pass target (quarter): r = the word, g = the field around it
 uniform vec2 res;
 uniform vec3 coc;        // as in s09-dof
 uniform float hk;
 uniform float dofAll;    // the whole frame through the defocus path (when the sweep is wide open)
-uniform vec3 base;       // linear colour of the face's light
-uniform vec2 faceAB;     // offset, amplitude: base · (a + b·V)
+uniform vec3 base;       // linear colour of the word's light
+uniform vec2 lowAB;      // field, word: luminance = field · (a + b·word)
 uniform float tm;        // 0 = exact (the still), 1 = AgX look (written back as linear for the clip post)
 uniform float gain;      // the kick's light (after the exchange, which would divide it out)
 uniform vec2 crossSz;
@@ -42,11 +42,11 @@ void main() {
   float cf = max(4.0 * max(min(coc.x * abs(s.a - coc.y), coc.z), d.a), 8.0 * dofAll);
   vec3 C = mix(s.rgb, d.rgb, smoothstep(1.5, 7.0, cf));
   vec3 L = texture(lpQ, uv).rgb;
-  float V = texture(faceQ, uv).r;
+  vec2 V = texture(lowQ, uv).rg;
   const vec3 Y = vec3(0.2126, 0.7152, 0.0722);
-  float target = faceAB.x + faceAB.y * V;
+  float target = V.g * (lowAB.x + lowAB.y * V.r);
   vec3 col = C * mix(1.0, target / max(dot(L, Y), 1e-3), hk);
-  col = mix(col, col * base / dot(base, Y), 0.35 * hk) * gain; // the face's light has a colour
+  col = mix(col, col * base / dot(base, Y), 0.35 * hk) * gain; // the word's light has a colour
   vec3 ag = srgb2lin(clamp(agxEotf(agxLook(agx(col), 1.12, 1.12)), 0.0, 1.0));
   col = mix(col, ag, tm);
   vec2 q = (gl_FragCoord.xy - 0.5 * res) / res.y, aq = abs(q);
