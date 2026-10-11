@@ -93,6 +93,7 @@ export function createLocus(g: Gfx): Scene {
   const pulses = new Float32Array(8 * 4);
   const beam = new Beam(g);
   let beamIdle = false;
+  let beamWarm = ''; // size the phosphor was last allocated at
   const cue: { audio: FrameCtx['audio'] | undefined; bell: number[]; harp: { t: number; midi: number }[] } = { audio: undefined, bell: [], harp: [] };
   beam.style = { sigmaPx: 1.4, tau: 0.25, intensity: 120, tint: [0.62, 0.55, 0.75] };
   let lastU = 0;
@@ -208,6 +209,10 @@ export function createLocus(g: Gfx): Scene {
       // the phosphor has faded ~2 s after the beam is off (tau 0.25 s): stop paying for it
       const idle = t > s0 + 24 * ROW + 2;
       if (!idle) beam.render(f.dt, hdr!, f.aspect, reset || beamIdle, 0.82, (beamOn * 800) / steps);
+      // the loader warms this scene at its middle, where the beam is long idle: draw it once, dark,
+      // so its full-screen RGBA32F phosphor exists before 01:00 (it cost a 52 ms frame there)
+      else if (beamWarm !== `${hdr!.w}x${hdr!.h}`) beam.render(0, hdr!, f.aspect, true, 0.82, 0);
+      beamWarm = `${hdr!.w}x${hdr!.h}`;
       beamIdle = idle;
     },
   };
