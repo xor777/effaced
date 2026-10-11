@@ -1,6 +1,7 @@
 // S12 · particle histogram (half resolution) → colour. Log-density like the flame of S13.
 // mode 0: the canvas — linear HDR into the post chain, over the canvas's own backdrop: a lit window
-//         with a glowing frame (the canvas's own border), and its flash when the particles leave.
+//         with a glowing frame (the canvas's own border) that lights up where the threads come near
+//         it (S01's motif: the creature shows at the edges), and its flash when the particles leave.
 // mode 1: the outside — no post chain there: a glow from the histogram's mips, the window's
 //         afterimages (frames left behind by its moves), the burst's flash and shock rings, AgX.
 #include "lib/common"
@@ -15,6 +16,7 @@ uniform int mode;
 uniform vec3 bgA, bgB;  // backdrop centre / edge (linear), mode 0
 uniform float bgK;
 uniform vec4 frame;     // mode 0: frame line colour (rgb, linear) and width (px)
+uniform float edgeK;    // mode 0: how much the threads near the border light it
 uniform vec4 flash;     // flash colour (rgb) · amount (a)
 uniform vec3 glow;      // mode 1: amount, mip, exposure (EV)
 uniform vec2 look;      // mode 1: AgX look power, saturation
@@ -59,6 +61,13 @@ void main() {
     vec2 e = min(px, res - px);
     float de = min(e.x, e.y);
     col += frame.rgb * (smoothstep(frame.w + 1.0, frame.w - 0.5, de) + 0.25 * exp(-de / (8.0 * frame.w)));
+    // the threads pressing on the border: a coarse mip of the histogram is the light near this stretch
+    if (edgeK > 0.0 && de < 0.12 * res.y) {
+      vec4 m = textureLod(hist, uv, 4.5);
+      float near = log(1.0 + m.a * kNorm * 6.0);
+      vec3 tint = m.rgb / max(m.a, 1e-9);
+      col += edgeK * near * tint * (2.5 * smoothstep(frame.w * 3.0, 0.0, de) + 0.6 * exp(-de / (0.025 * res.y)));
+    }
     col += flash.rgb * flash.a * (0.6 + 0.4 * smoothstep(0.8, 0.0, length(p)));
     o = vec4(col, 1.0);
   } else {

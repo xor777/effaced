@@ -12,10 +12,13 @@ uniform float dH;       // CSS perspective distance (H units)
 uniform float conv;     // 0..1: landing on the sigil
 uniform vec3 OC[4];     // a cycle of four colours round the Thomas attractor's lobes
 uniform vec3 CS, CH;    // the sigil's light, the heat of the burst
+uniform vec3 CP;        // the +1's light
 uniform float heatK;    // the burst's white heat, fading
 uniform float settle;   // 0 in flight (colour by direction) … 1 home on the attractor (colour by lobe)
 uniform vec2 band;      // NDC y range drawn by this pass
+uniform int streak;     // 1: the +1's streak (GL_LINES, 2 vertices: where it is, where it was a moment ago)
 out vec3 col;
+out float wt;
 
 vec2 sigil(float u) {
   float x = u * float(sigN);
@@ -25,9 +28,13 @@ vec2 sigil(float u) {
 }
 
 void main() {
-  ivec2 ip = ivec2(gl_VertexID % stW, gl_VertexID / stW);
+  int id = streak == 1 ? 0 : gl_VertexID;
+  ivec2 ip = ivec2(id % stW, id / stW);
   vec4 P = texelFetch(op, ip, 0), D = texelFetch(od, ip, 0);
+  bool tail = streak == 1 && gl_VertexID == 1;
+  if (tail) P.xyz -= D.xyz * 0.12;
   col = vec3(0.0);
+  wt = 1.0;
   gl_PointSize = 1.0;
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   if (P.w < 0.5) return;
@@ -62,4 +69,10 @@ void main() {
   c = mix(c, CH, clamp(sp * 0.3, 0.0, 1.0) * heatK);
   col = mix(c, CS, e);
   col /= max(1.0, 0.45 * sz * sz);
+  // the +1: the first out, and the brightest — a warm spark until it lands
+  if (id == 0) {
+    gl_PointSize = 3.0;
+    col = mix(mix(CP, vec3(1.0), 0.35) * 3.0, CS, e);
+    wt = mix(tail ? 2.0 : 40.0, 1.0, e);
+  }
 }

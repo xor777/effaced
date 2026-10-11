@@ -1,5 +1,6 @@
 // S12 · histogram bin (RGBA32F, additive): Σ colour, Σ count; round soft points when larger than 1 px
 in vec3 col;
+in float wt; // how many particles this one counts as (the +1 outweighs the others)
 out vec4 o;
 uniform float soft;
 uniform float wgt; // this frame's weight (exponential decay of the histogram)
@@ -10,5 +11,5 @@ void main() {
     w = max(0.0, 1.0 - dot(q, q));
     w *= w;
   }
-  o = vec4(col, 1.0) * (w * wgt);
+  o = vec4(col, 1.0) * (w * wgt * wt);
 }
