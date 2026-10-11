@@ -26,7 +26,7 @@ void main() {
   if (reset == 1) P = vec4(0.0);
   if (P.w < 0.5) {
     // still in the picture: ride on the canvas plane
-    vec3 v = innerView(baseFrame(s.xyz));
+    vec3 v = innerView(baseFrame(flapQ(s.xyz)));
     P = vec4((W * vec4(v.xy, 0.0, 1.0)).xyz, 0.0);
     D = vec4(0.0, 0.0, 0.0, s.w);
     if (tRel >= launchAt(s.w)) {

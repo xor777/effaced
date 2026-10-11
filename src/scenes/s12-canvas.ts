@@ -12,12 +12,15 @@
 //          a mirror (-webkit-box-reflect: its reflection turns with it) and its border glows;
 //   bars   each crash is a gesture of the window (a whip, a swing, a full turn on 18:48, a punch towards
 //          us on the orchestra hit of 19:00), and the window's fast moves leave afterimage frames;
-//          inside, the cloud morphs on the G/F bars (18:16, 18:48) from the Lorenz butterfly into a
-//          Halvorsen — the triangle — in a vortex, and back on the F bars; the inner camera sways on
-//          the hits (the wings stay face-on) and rises to look down the axis while the triangle shows;
-//          the kick makes it breathe;
-//   19:16  the inhale (snare and timpani roll): the window recedes and trembles, the cloud contracts and
-//          heats up;
+//          inside, one living creature: the Lorenz butterfly flaps its wings (a quick stroke that spreads
+//          them into a V on the beat, a slower one that closes them; one flap per half-bar in 18, per
+//          beat from 19:00) — closed, its wings round off into a heart. On the G/F bars (18:16, 18:48)
+//          it becomes one: the view lowers to face it, the wings fold in, the lower half draws in to a
+//          point, and every kick is a heartbeat — a quick contraction and a #FACADE flush; the F bars
+//          (18:32, 19:00) open it into the butterfly again; the view sways on the hits;
+//   19:16  the inhale (snare and timpani roll): the window recedes and trembles, the creature contracts,
+//          heats up and flutters (fast, small strokes) — half heart, half butterfly;
+//   19:29  its wings spread wide;
 //   19:32  the burst: the canvas flashes, the particles explode out of it white-hot, shock rings and a
 //          flash on the outside, the stage shakes; they cool into colour on the Thomas attractor;
 //   19:44  they land on the sigil (S13's first frame).
@@ -36,14 +39,12 @@ import { markerTimes, hit, smoothstep } from '../timeline/events.ts';
 import { ROW, ROWS } from '../timeline/script.ts';
 import { sigilTables, SIGIL_FULL } from '../audio/synth/scope.ts';
 import { SIGIL_R, SIGIL_COL, BANDS, p3 } from './s13-erasure.ts'; // same sigil size and light, same banded splatting
-import { cues, pulse, swell, type Cues, type Ev } from './s12-s13-cues.ts';
+import { cues, pulse, swell, lastAt, type Cues, type Ev } from './s12-s13-cues.ts';
 
 const NW = 1024, NH = 1024; // 1M particles
 const RATE = 60; // simulation steps per second of song time (both contexts) — the scene runs at 60 Hz
 const H_BASE = 0.005; // Lorenz time per step
-const H_HAL = 0.0045; // Halvorsen time per step
 const BURN = 300, H_BURN = 0.01; // settling steps of the Lorenz cloud (once, then kept as a seed)
-const BURN_HAL = 400;
 const THOMAS_B = 0.2, THOMAS_H = 3.2 / RATE; // Thomas: dissipation b, attractor time per step
 const THOMAS_AT = [0, 0.02, -0.3, 0.2]; // its centre in the stage (H units) and its scale (H per unit)
 const P18 = 0x18 * ROWS, P1A = 0x1a * ROWS;
@@ -95,12 +96,10 @@ interface Ctx {
   out?: Program;
   thomas?: Program;
   inner: PingPong;
-  hal?: PingPong;
   outer?: PingPong;
   home?: PingPong;
   /** settled states, computed once: a reset is a copy, not a burn-in (no hitch at 18:00) */
   seed: Target | null;
-  seedHal: Target | null;
   seedHome: Target | null;
   hist: Target | null;
   /** nothing splatted since the last clear */
@@ -127,11 +126,9 @@ export function createCanvas(g: Gfx): Scene {
     out: outside ? program(gg, 'scenes/s12-out') : undefined,
     thomas: outside ? program(gg, 'scenes/s12-thomas') : undefined,
     inner: new PingPong({ formats: [gg.gl.RGBA32F], filter: gg.gl.NEAREST }),
-    hal: outside ? undefined : new PingPong({ formats: [gg.gl.RGBA32F], filter: gg.gl.NEAREST }),
     outer: outside ? new PingPong({ formats: [gg.gl.RGBA32F, gg.gl.RGBA32F], filter: gg.gl.NEAREST }) : undefined,
     home: outside ? new PingPong({ formats: [gg.gl.RGBA32F], filter: gg.gl.NEAREST }) : undefined,
     seed: null,
-    seedHal: null,
     seedHome: null,
     hist: null,
     empty: false,
@@ -159,7 +156,7 @@ export function createCanvas(g: Gfx): Scene {
   };
   const BG = [p3('#24152E').map((x) => x * 1.1), p3('#0B0710')];
   // dev knobs (globalThis.__s12)
-  const dev = { ref: 80, expo: 1.2, gain: 0.9, pitch: 0.25, yaw: -0.8, xk: 0.26, depthK: 1.0 };
+  const dev = { ref: 80, expo: 1.2, gain: 0.9, yaw: -0.8, pitch: 0.3, heartPitch: 0, heartFold: 0.4, flapAmp: 0.6, xk: 0.26, depthK: 1.0 };
   if (import.meta.env.DEV) (globalThis as unknown as { __s12: typeof dev }).__s12 = dev;
   const FRAME = p3('#FACADE');
 
@@ -172,8 +169,8 @@ export function createCanvas(g: Gfx): Scene {
     /** pose transitions (times) and the value each one starts from */
     poseT: number[];
     poseFrom: Pose[];
-    /** morph toggles: time, direction */
-    morph: [number, number][];
+    /** butterfly ↔ heart: changes (time, amount) */
+    heart: [number, number][];
     /** hits inside the scene (crash + orchestra), for the inner camera's whips */
     whips: Ev[];
     stab64: number;
@@ -213,7 +210,9 @@ export function createCanvas(g: Gfx): Scene {
       land1: rowT(126),
       poseT,
       poseFrom,
-      morph: [[near(16), 1], [near(32), -1], [near(48), 1], [near(64), -1]],
+      // heart on the G/F bars, butterfly on the F bars; the inhale is a fluttering half-heart, the burst
+      // spreads the wings
+      heart: [[near(16), 1], [near(32), -1], [near(48), 1], [near(64), -1], [rowT(80), 0.5], [tHit - 2 * ROW, -0.5]],
       whips: merged.filter((e) => e.t > T0 + 0.01 && e.t < tHit - 0.01),
       stab64: near(64),
     };
@@ -221,23 +220,51 @@ export function createCanvas(g: Gfx): Scene {
     return p;
   };
 
-  /** Lorenz ↔ Halvorsen: 0..1 */
-  const morphAt = (p: Plan, t: number) => clamp01(p.morph.reduce((m, [te, d]) => m + d * ease((t - te) / (6 * ROW)), 0));
+  /** butterfly 0 … heart 1 */
+  const heartAt = (p: Plan, t: number) => clamp01(p.heart.reduce((m, [te, d]) => m + d * ease((t - te) / (3 * ROW)), 0));
+  /** the heartbeat: every kick a quick contraction (the bar's strong kicks the strongest) */
+  const beatAt = (p: Plan, t: number) => {
+    const i = lastAt(p.c.kick, t);
+    if (i < 0) return 0;
+    const x = t - p.c.kick[i].t, v = p.c.kick[i].v;
+    return v * v * 1.8 * Math.min(1, x / 0.015) * Math.exp(-Math.max(0, x - 0.015) / 0.11);
+  };
+  /**
+   * The wings' angle (rad): a flap is a quick downstroke and a slower upstroke — one per half-bar in 18,
+   * per beat from 19:00, a fast small flutter through the inhale; the heart holds them folded in (the
+   * lobes close); for the burst they spread flat.
+   */
+  const flapAt = (p: Plan, t: number) => {
+    const r = (t - T0) / ROW;
+    if (r < 0) return 0;
+    let ph: number, amp: number;
+    if (r < 64) (ph = r / 8), (amp = 1);
+    else if (r < 80) (ph = 8 + (r - 64) / 4), (amp = 0.85);
+    else (ph = 12 + (r - 80) / 2), (amp = 0.4);
+    const u = ph - Math.floor(ph);
+    // +1 wings closed … −0.45 spread wide; the stroke that opens them is quick (on the beat), the closing slow
+    const w = u < 0.32 ? 1 - 1.45 * ease(u / 0.32) : -0.45 + 1.45 * ease((u - 0.32) / 0.68);
+    const h = heartAt(p, t);
+    // closed, the wings round off into a heart; spread, they are a butterfly's V
+    const th = (-0.15 + dev.flapAmp * amp * w) * (1 - h) + (dev.heartFold + 0.05 * w) * h;
+    // for the burst: spread wide
+    return th + (-0.5 - th) * smoothstep(p.hit - 3 * ROW, p.hit - 0.5 * ROW, t);
+  };
   /** the inhale 19:16–19:31 */
   const inhaleAt = (p: Plan, t: number) => easeIn((t - rowT(80)) / (p.hit - rowT(80))) * (t < p.hit ? 1 : 0);
 
   // ---- inner camera (the picture inside the canvas) at song time t — a pure function of t
   const innerCam = (p: Plan, t: number) => {
     const l = t - T0;
-    const m = morphAt(p, t);
+    const hk = heartAt(p, t);
     // the butterfly stays face-on: the view sways (each hit a whip, alternately left and right) instead of
-    // circling it; while the triangle shows, it turns and the camera rises to look down its axis
+    // circling it, and looks at it a little from above; the heart is faced square and level
     let whip = 0;
     p.whips.forEach((e, i) => {
       if (e.t <= t) whip += (i % 2 ? -1 : 1) * 0.5 * e.v * (1 - Math.exp(-(t - e.t) / 0.16));
     });
-    const yaw = dev.yaw + 0.3 * Math.sin(0.45 * l) + whip + 1.6 * m;
-    const pitch = dev.pitch + 0.06 * Math.sin(l * 0.37) + 1.2 * m;
+    const yaw = dev.yaw + (1 - hk) * (0.3 * Math.sin(0.45 * l) + whip);
+    const pitch = dev.pitch + (dev.heartPitch - dev.pitch) * hk + 0.04 * Math.sin(l * 0.37);
     const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
     // R = Rx(pitch) · [x, z, −y] · Rz(yaw), as a GLSL mat3 (column-major)
     const rzm = [cy, sy, 0, -sy, cy, 0, 0, 0, 1];
@@ -248,9 +275,9 @@ export function createCanvas(g: Gfx): Scene {
       for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) for (let k = 0; k < 3; k++) o[c * 3 + r] += a[k * 3 + r] * b[c * 3 + k];
       return o;
     };
-    const zoom = (1 + 0.12 * smoothstep(0, 4, l)) * (1 + 0.1 * m);
-    const breath = (1 + 0.06 * pulse(p.c.kick, t, 0.09) + 0.14 * pulse(p.c.stab, t, 0.3)) * (1 - 0.3 * inhaleAt(p, t));
-    return { rot: m3(rxm, m3(swap, rzm)), cam: [0, 0, 0.35, 1.02 * zoom], dist: 4.2, breath };
+    const zoom = (1 + 0.12 * smoothstep(0, 4, l)) * (1 + 0.08 * hk);
+    const breath = (1 - (0.035 + 0.05 * hk) * beatAt(p, t) + 0.14 * pulse(p.c.stab, t, 0.3)) * (1 - 0.3 * inhaleAt(p, t));
+    return { rot: m3(rxm, m3(swap, rzm)), cam: [0, 0, 0.35, 1.02 * zoom], dist: 4.2, breath, flap: flapAt(p, t), heart: hk };
   };
 
   // ---- the canvas's transform at song time t: CSS matrix (px, y down) and plane → stage (H, y up)
@@ -315,9 +342,7 @@ export function createCanvas(g: Gfx): Scene {
     gx.bindFramebuffer(gx.DRAW_FRAMEBUFFER, null);
   };
   const base = (c: Ctx, reset = false, h = H_BASE) =>
-    pass(c.g, c.inner, c.sim, (p) => p.tex('st', c.inner.read.tex[0], 0).set('h', h).set('reset', reset ? 1 : 0).set('kind', 0));
-  const halvorsen = (reset = false) =>
-    pass(g, A.hal!, A.sim, (p) => p.tex('st', A.hal!.read.tex[0], 0).set('h', H_HAL).set('reset', reset ? 1 : 0).set('kind', 1));
+    pass(c.g, c.inner, c.sim, (p) => p.tex('st', c.inner.read.tex[0], 0).set('h', h).set('reset', reset ? 1 : 0));
   const thomas = (reset = false, h = THOMAS_H) =>
     pass(g2, B.home!, B.thomas!, (p) => p.tex('st', B.home!.read.tex[0], 0).set('h', h).set('b', THOMAS_B).set('reset', reset ? 1 : 0));
 
@@ -334,14 +359,6 @@ export function createCanvas(g: Gfx): Scene {
       c.inner.ensure(c.g, NW, NH);
       copy(c.g, c.seed, c.inner.read);
     }
-    if (!A.seedHal) {
-      halvorsen(true);
-      for (let i = 0; i < BURN_HAL; i++) halvorsen();
-      A.seedHal = ensureTarget(g, null, NW, NH, { formats: [gl.RGBA32F], filter: gl.NEAREST });
-      copy(g, A.hal!.read, A.seedHal);
-    }
-    A.hal!.ensure(g, NW, NH);
-    copy(g, A.seedHal, A.hal!.read);
     if (!B.seedHome) {
       thomas(true, 0.15);
       for (let i = 0; i < 320; i++) thomas(false, 0.15);
@@ -362,7 +379,7 @@ export function createCanvas(g: Gfx): Scene {
 
   const camUniforms = (pr: Program, p: Plan, t: number) => {
     const ic = innerCam(p, t);
-    pr.set('iRot', ic.rot).set('iCam', ic.cam).set('iDist', ic.dist).set('iBreath', ic.breath).set('burst', 0.16);
+    pr.set('iRot', ic.rot).set('iCam', ic.cam).set('iDist', ic.dist).set('iBreath', ic.breath).set('iFlap', ic.flap).set('iHeart', ic.heart).set('burst', 0.16);
   };
 
   const outStep = (p: Plan, t: number, reset: boolean) =>
@@ -423,15 +440,12 @@ export function createCanvas(g: Gfx): Scene {
       camUniforms(c.splat, p, t);
       c.splat.set('stW', NW).set('aspect', f.aspect).set('soft', c === B ? 1 : 0).set('wgt', c.W);
       if (c === A) {
-        const m = morphAt(p, t);
-        const dm = Math.abs(morphAt(p, t + 0.05) - m) / 0.05;
         c.splat
           .tex('st', A.inner.read.tex[0], 0)
-          .tex('sh', A.hal!.read.tex[0], 1)
           .set('tRel', t - p.hit)
           .set('xk', dev.xk)
           .set('depthK', dev.depthK)
-          .set('morph', m, 3.2, 0.3 * inhaleAt(p, t) + 0.25 * pulse(p.c.stab, t, 0.3) + 0.1 * dm, 0);
+          .set('look', 0.3 * inhaleAt(p, t) + 0.25 * pulse(p.c.stab, t, 0.3), beatAt(p, t) * (0.3 + 0.7 * heartAt(p, t)), 1 - 0.6 * heartAt(p, t), 0);
         pal.in.forEach((col, i) => c.splat.set(`C${i}`, col));
       } else {
         c.splat
@@ -552,7 +566,6 @@ export function createCanvas(g: Gfx): Scene {
         steps_++;
         if (steps_ <= allOut) {
           base(A);
-          if (morphAt(p, T0 + steps_ / RATE) > 0 || morphAt(p, T0 + (steps_ + RATE) / RATE) > 0) halvorsen();
         }
         if (steps_ >= outFrom) {
           if (steps_ <= allOut) base(B);
@@ -565,10 +578,8 @@ export function createCanvas(g: Gfx): Scene {
       // ---- the canvas: particles that have not left yet, a ghost of those that have
       const after = t - tHit;
       const kick = pulse(c.kick, t, 0.1), orch = pulse(c.stab, t, 0.3);
-      const m = morphAt(p, t);
-      const dm = Math.abs(morphAt(p, t + 0.05) - m) / 0.05;
-      // light trails: a longer memory while the cloud flies between its shapes
-      const tauA = after > 0 ? 0.6 : 0.14 + 0.25 * Math.min(1, dm);
+      // light trails: the wings leave a short wake as they beat
+      const tauA = after > 0 ? 0.6 : 0.15;
       const decayA = f.dt > 0 ? Math.exp(-f.dt / tauA) : 1;
       const fadeA = 1 - smoothstep(tHit + 1.2, p.land0 + 0.5, t);
       const bgK = 1 - smoothstep(p.land0, p.land1 - 0.3, t);
