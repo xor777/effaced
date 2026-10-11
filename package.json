@@ -1,0 +1,29 @@
+{
+  "name": "effaced",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p .",
+    "render": "node tools/render-xm.ts music/effaced.xm out/effaced.wav",
+    "music": "node tools/build-xm.ts music/score/effaced.ts music/effaced.xm",
+    "xm-check": "node tools/xm-check.ts music/effaced.xm",
+    "instruments": "node tools/build-instruments.ts",
+    "audio-tests": "node tools/audio-tests.ts"
+  },
+  "devDependencies": {
+    "@tweakpane/core": "^2.0.5",
+    "@tweakpane/plugin-essentials": "^0.2.1",
+    "@types/node": "^26.6.5",
+    "gl-matrix": "^3.4.4",
+    "tweakpane": "^4.0.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  },
+  "dependencies": {
+    "chiptune3": "0.8.9",
+    "fft.js": "^4.0.4"
+  }
+}

@@ -1,0 +1,170 @@
+/* hex poem (PLAN §1.4) — for those who open DevTools */
+:root {
+  --a: #ace;
+  --b: #bed;
+  --c: #facade;
+  --d: #decade;
+  --e: #face;
+  --f: #fade;
+  --vga-blue: #0000aa;
+  --vga-gray: #aaaaaa;
+  --vga-white: #ffffff;
+  --vga-cyan: #00aaaa;
+  --vga-yellow: #ffff55;
+  --vga-black: #000000;
+  /* the stage is the whole screen: 3024×1890 (16:10) fullscreen on the target MacBook */
+  --stage-w: 100vw;
+  --stage-h: 100vh;
+  --beat: 0.48s; /* 4 rows × 0.12 s = one beat at 125 BPM; the cursor blinks in tempo */
+}
+
+::selection {
+  background: #decade;
+  color: #000;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  cursor: default;
+}
+
+#stage {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: var(--stage-w);
+  height: var(--stage-h);
+  transform: translate(-50%, -50%);
+  perspective: 2000px;
+  overflow: visible;
+}
+
+#gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#voice {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font: 400 calc(var(--stage-h) * 0.022) / 1.3 ui-monospace, Menlo, monospace;
+  color: #fff;
+  mix-blend-mode: difference;
+}
+
+/* ---- text mode (setup + loader): 80×25 cells across the 16:9 stage ----
+   font-size is set from JS so that exactly 80ch fit the stage width */
+.textmode {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: var(--stage-w);
+  height: var(--stage-h);
+  transform: translate(-50%, -50%);
+  font-family: ui-monospace, Menlo, monospace;
+  background: var(--vga-black);
+  color: var(--vga-gray);
+  z-index: 10;
+  overflow: hidden;
+}
+.textmode[hidden] {
+  display: none;
+}
+.textmode .ln {
+  height: calc(var(--stage-h) / 25);
+  line-height: calc(var(--stage-h) / 25);
+  white-space: pre;
+  overflow: hidden;
+}
+/* inline-block (not flex): whitespace-only runs must still paint their background */
+.textmode .ln > span {
+  display: inline-block;
+  height: 100%;
+  vertical-align: top;
+}
+.textmode [data-id] {
+  cursor: pointer;
+}
+/* VGA attributes: fg on bg */
+.tb { color: var(--vga-gray); background: var(--vga-blue); }
+.th { color: var(--vga-white); background: var(--vga-blue); }
+.ty { color: var(--vga-yellow); background: var(--vga-blue); }
+.tc { color: #55ffff; background: var(--vga-blue); }
+.ts { color: var(--vga-black); background: var(--vga-cyan); }
+.tt { color: var(--vga-black); background: var(--vga-gray); }
+.tr { color: #aa0000; background: var(--vga-gray); }
+.tk { color: var(--vga-gray); background: var(--vga-black); }
+.tw { color: var(--vga-white); background: var(--vga-black); }
+.td { color: #555; background: var(--vga-black); }
+.cursor {
+  animation: blink var(--beat) steps(1, end) infinite;
+}
+@keyframes blink {
+  50% {
+    visibility: hidden;
+  }
+}
+
+/* dev UI */
+#dev {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font: 11px/1.4 ui-monospace, Menlo, monospace;
+  color: #ccc;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 20;
+  user-select: none;
+}
+#dev .bar {
+  position: relative;
+  height: 22px;
+  cursor: pointer;
+}
+#dev .cue {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  padding-left: 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 22px;
+}
+#dev .cue.p1 {
+  background: rgba(222, 202, 222, 0.12);
+}
+#dev .cue.p2 {
+  background: rgba(172, 206, 222, 0.08);
+}
+#dev .head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #face;
+}
+#dev .loop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(250, 202, 222, 0.18);
+}
+#dev .info {
+  display: flex;
+  gap: 16px;
+  padding: 2px 8px;
+}
+#dev.hidden {
+  display: none;
+}

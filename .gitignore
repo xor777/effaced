@@ -1,0 +1,20 @@
+node_modules
+dist
+out
+.DS_Store
+.claude/
+
+# renders stay local; the instrument bank ships (pnpm music rebuilds the .xm from it)
+*.wav
+!music/instruments/*.wav
+
+# raw sample libraries (re-fetch: node tools/bank/fetch-samples.ts, see music/instruments/SOURCES.md)
+samples/
+# the old synthetic bank, kept locally as a backup
+music/instruments-synth-v0/
+
+# plans, briefs and working notes stay local
+PLAN.md
+MUSIC_BRIEF.md
+music/score/NOTES.md
+music/score/notes-*.md
