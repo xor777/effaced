@@ -6,15 +6,27 @@
 // the view ray of the first step (S5 = E + μ(S1 − E)). Every camera on the line through S1 and S5 sees
 // a closed loop, so the camera may ride that line.
 //
+// It is drawn to read as stairs at a glance: few, big, steep steps (27 round the loop), light treads,
+// a dark stringer band under the sawtooth of every side face, ink at the nosings — and a single file
+// of twelve small figures (architectural-model people) climbing it, Escher's "Ascending and
+// Descending": one step per Shepard note, all in step, round and round and never down.
+//
 //   09:00  one bar of plain camera: a push along the magic line, the city big behind the tower
 //   09:16  the vertigo: the stairs climb (the tower grows under them, its windows stream down) while
 //          the camera dollies in and zooms out on the magic line — the stairs hold still in the frame
 //          and the city rushes away. It moves in lurches on the kicks and accelerates into the snare
-//          roll of 0A bar 3. Two treads per Shepard note slide up like an escalator — the corners are
-//          winder treads that turn with them, so the whole loop moves; a lit tread rides them round
-//          and round, for ever upwards.
+//          roll of 0A bar 3. The walkers climb a tread per note; the first one's tread is lit (the
+//          creature's step) and the light climbs round with it. The treads can also slide up like an
+//          escalator (dev knob `esc`, treads per note; the walkers ride it), off by default: under
+//          walking figures a moving stair reads as sliding, not climbing.
 //   0A:48  the stop hit: a white frame, a hard cut off the magic line (the loop is open), three rows
-//          of stillness, then the flights fall and a 90° turn shows the city edge-on — paper.
+//          of stillness, then the flights fall (the walkers with them) and a 90° turn shows the city
+//          edge-on — paper.
+//
+// Dev knobs (globalThis.__s05.o = { … }, live): walkers (count, 12) · wh (figure height in risers, 4.4)
+// · step (s, 0.66) · walk (treads per step, 1) · esc (escalator treads per note, 0) · size (world
+// height framed at the stairs, 16) · inkpx / ink / band (line width px, strength, stringer band in
+// risers) · yaw (deg: swing the camera off the magic line to see the real, open loop).
 
 import { type Gfx, program, fullscreen } from '../gfx/gl.ts';
 import type { Scene, FrameCtx } from './types.ts';
@@ -134,9 +146,18 @@ export function createStairs(g: Gfx): Scene {
   const gl = g.gl;
   const prog = program(g, 'scenes/s05-stairs');
   const taa = new TAA(g, { ratio: 0.45 });
-  // the tower stands on cell (0, 4) of the city; the loop's first step at 21 units
-  const ORIGIN: V = [2.2, 21.0, 25.0];
-  const ST = penroseStairs(ORIGIN, 0.85, 60, [5, 5], 0.85, 0.21, 1.5);
+  // dev knobs (see the header): globalThis.__s05.o = { walkers, wh, step, walk, esc, size, … }
+  const dbg: { o: Record<string, number> } = import.meta.env.DEV ? ((globalThis as any).__s05 ??= { o: {} }) : { o: {} };
+  const knob = (k: string, v: number) => dbg.o[k] ?? v;
+  // Few, big, steep steps: 3 + 3 treads on the far flights, the near ones as long as the closure needs
+  // (≈ 9 each), 27 treads round the loop. Rise/run ≈ 0.35, so the risers and the sawtooth of the side
+  // faces read from the magic elevation.
+  const SOLVE = { theta: 0.85, D: 60, n01: [3, 3] as [number, number], run: 1.3, rise: 0.45, width: 1.6 };
+  const solve = (o: V) => penroseStairs(o, SOLVE.theta, SOLVE.D, [...SOLVE.n01], SOLVE.run, SOLVE.rise, SOLVE.width);
+  // the tower stands on cell (0, 4) of the city (its centre at x 1.0, z 27.8); the loop's first step at 21 units
+  const st0 = solve([0, 0, 0]);
+  const ORIGIN: V = [1.03 - st0.center[0], 21.0, 27.8 - st0.center[2]];
+  const ST = solve(ORIGIN);
   const seamDir = (() => {
     const d = sub(ST.S5, ST.S1);
     return mul(d, 1 / len(d));
@@ -156,12 +177,145 @@ export function createStairs(g: Gfx): Scene {
     win: hexP3('#ffd9a8', 1.6),
     cloud: [0.5, 0.8, 0.02, 1.25],
   };
+  // the drawing of the stairs: light treads, darker risers, a dark stringer band under the sawtooth
+  // of the side faces, ink at every nosing; the walkers in one flat colour
+  const TREAD = hexP3('#f6eee8', 0.86), RISER = hexP3('#decade', 0.36), STRINGER = hexP3('#a88aa6', 0.36);
+  const INK = hexP3('#3a2840', 1);
+  const WALKER = hexP3('#5a3f5e', 0.55);
   const FA = new Float32Array(16), FB = new Float32Array(16), FC = new Float32Array(16), FD = new Float32Array(16);
-  const SIZE = 17; // world height the frame holds at the stairs
+  const MAXW = 16;
+  const WB = new Float32Array(4 * MAXW), WL = new Float32Array(4 * MAXW), WR = new Float32Array(4 * MAXW), WC = new Float32Array(4 * MAXW);
+  const WS = new Float32Array(4 * MAXW), WALL = new Float32Array(4); // bounding spheres: each walker, all of them
   const D_PLAIN = 88, D_LOCK = 66, D_END = 17; // camera distance along the seam line
   const RISE = 70; // climb scale: ≈ 1300 units above the city by the stop
   let lastStop = -1;
   let lastRig = 0;
+  let cNear = ST.mu;
+
+  // ---- the loop as a path: global tread coordinate S → a point on the centre line of the treads
+  const FL = ST.flights;
+  const lam = FL.map((f) => f.rise / FL[0].rise);
+  /** flight of global coordinate S (S may run past the seam: ≥ N stays on the last flight's run-on, < 0 on the first) */
+  const flightOf = (S: number) => {
+    let k = 0;
+    while (k < 3 && S >= FL[k + 1].s0) k++;
+    return k;
+  };
+  /** world xz of the centre line at S on flight k (straight part → winder arc → straight on beyond) and the direction */
+  function place(k: number, S: number): { p: V; d: [number, number] } {
+    const fl = FL[k];
+    const ls = S - fl.s0;
+    const u = fl.u, side: V = [-u[2], 0, u[0]];
+    const R = fl.width / 2;
+    if (ls < fl.n) return { p: add(fl.start, mul(u, ls * fl.run)), d: [u[0], u[2]] };
+    if (ls < fl.n + fl.cn) {
+      const th = ((ls - fl.n) * fl.run) / R - Math.PI / 2;
+      const c = Math.cos(th), s = Math.sin(th);
+      return {
+        p: add(fl.start, add(mul(u, fl.n * fl.run + R * c), mul(side, R + R * s))),
+        d: [-s * u[0] + c * side[0], -s * u[2] + c * side[2]],
+      };
+    }
+    return { p: add(fl.start, add(mul(u, fl.n * fl.run + R), mul(side, R + (ls - fl.n - fl.cn) * fl.run))), d: [side[0], side[2]] };
+  }
+  /** top of the tread whose front edge is at S (flight-local ramp, extrapolated past the ends) */
+  const ramp = (k: number, S: number) => FL[k].start[1] + (S - FL[k].s0) * FL[k].rise;
+  /** size of the steps at S: the flight's own scale, turning to the next one through the winder corner;
+   *  past the seam it is the size that matches the far start of the loop as seen from the camera */
+  function scaleAt(k: number, S: number) {
+    const fl = FL[k];
+    const ls = S - fl.s0;
+    const l1 = k < 3 ? lam[k + 1] : cNear;
+    if (ls <= fl.n) return lam[k];
+    if (ls >= fl.n + fl.cn) return l1;
+    return lam[k] * (l1 / lam[k]) ** ((ls - fl.n) / fl.cn);
+  }
+  const smooth = (a: number, b: number, x: number) => ease((x - a) / (b - a));
+  const sat01 = (x: number) => Math.min(1, Math.max(0, x));
+
+  /**
+   * The walkers: a single file, one step per Shepard note. Walker i stands on physical tread
+   * b_i + (notes so far) of the moving frame (tread j spans S ∈ [j + m, j + 1 + m]; m is the escalator,
+   * 0 unless the `esc` knob moves it). The whole walker is drawn in one copy of the seam: near (the
+   * last flight's run-on) while its trailing foot is still on the first tread, far once it has left it
+   * — the same hand-over at a riser the treads use, so it passes the seam unbroken and never descends.
+   * Its size follows the steps under it; past the seam it is the size that matches the far start as
+   * seen from the camera.
+   */
+  function walkers(nw: number, steps: number, p: number, walk: number, m: number, rig: number) {
+    const N = ST.N;
+    const phi = m - Math.floor(m);
+    // A step climbs one tread in three movements, like a slow procession on deep steps: one foot
+    // paces forward on the tread, the other goes up the riser, the first joins it. Foot positions in
+    // treads from the back edge of the start tread; at rest both feet stand just past the nosing.
+    const REST = 0.35, MID = REST + 0.45 * walk, UP = REST + walk;
+    // foot A: REST → MID (a pace on the tread), then MID → UP (up the riser); foot B: REST → UP
+    const a1 = p < 0.5;
+    const xa0 = a1 ? REST : MID, xa1 = a1 ? MID : UP;
+    const xa = xa0 + (xa1 - xa0) * (a1 ? smooth(0, 0.35, p) : smooth(0.6, 0.95, p));
+    const xb = REST + (UP - REST) * smooth(0.25, 0.7, p);
+    const la = a1 ? 0.35 * Math.sin(Math.PI * sat01(p / 0.35)) : Math.sin(Math.PI * sat01((p - 0.6) / 0.35));
+    const lb = Math.sin(Math.PI * sat01((p - 0.25) / 0.45));
+    const H = knob('wh', 4.4) * FL[0].rise; // figure height in risers of the first flight
+    for (let i = 0; i < nw; i++) {
+      const j0 = Math.round(1 + (i * N) / nw) + walk * steps; // physical tread at the start of this step
+      const aLeft = (i + steps) % 2 === 0; // which foot paces first
+      const xL = aLeft ? xa : xb, xR = aLeft ? xb : xa;
+      // anchor: the trailing foot; the whole walker is drawn near (+N) while it is on the first tread
+      const xT = Math.min(xL, xR);
+      let A = j0 + xT + m;
+      A -= Math.floor(A / N) * N;
+      const shift = A < 1 + phi ? N : 0;
+      const at = (x: number) => A + (x - xT) + shift; // S of tread position x in the chosen copy
+      const xBody = 0.5 * (xL + xR);
+      const Sb = at(xBody);
+      const kb = shift ? 3 : flightOf(Sb);
+      const body = place(kb, Sb);
+      const s = H * scaleAt(kb, Sb);
+      const ell = 0.5 * s; // leg length = hip height at rest
+      const off: V = [FD[kb * 4], FD[kb * 4 + 1] + rig, FD[kb * 4 + 2]];
+      const side: V = [-body.d[1], 0, body.d[0]];
+      const fwd: V = [body.d[0], 0, body.d[1]];
+      // a foot at x stands on the top of its tread (the tread whose back edge is at floor(x));
+      // moving over a nosing it lifts clear of it
+      const top = (x: number) => ramp(kb, at(Math.floor(x)) + 1);
+      const foot = (x: number, x0: number, x1: number, lift: number, sgn: number) => {
+        const q = place(kb, at(x));
+        const k = x1 > x0 + 1e-6 ? (x - x0) / (x1 - x0) : 1;
+        const y = top(x0) + (top(x1) - top(x0)) * smooth(0, 0.45, k) + 0.4 * FL[kb].rise * lift;
+        return add(add([q.p[0], y, q.p[2]], mul(side, sgn * 0.075 * s)), off);
+      };
+      const fa = (sgn: number) => foot(xa, xa0, xa1, la, sgn), fb = (sgn: number) => foot(xb, REST, UP, lb, sgn);
+      const fL = aLeft ? fa(1) : fb(1);
+      const fR = aLeft ? fb(-1) : fa(-1);
+      // the hip: as high as the legs reach (≤ 4 % stretch), never above its height at rest
+      const bxz: V = [body.p[0] + off[0], 0, body.p[2] + off[2]];
+      let hipY = 0.5 * (fL[1] + fR[1]) + ell;
+      for (const f of [fL, fR]) {
+        const d = Math.hypot(f[0] - bxz[0], f[2] - bxz[2]);
+        hipY = Math.min(hipY, f[1] + Math.sqrt(Math.max((1.04 * ell) ** 2 - d * d, 0.5 * ell * ell)));
+      }
+      const B: V = [bxz[0], hipY - ell, bxz[2]];
+      const lean = 0.05 + 0.12 * Math.sin(Math.PI * p);
+      const hip = add(B, [0, ell, 0]);
+      const chest = add(hip, add([0, 0.24 * s, 0], mul(fwd, lean * 0.24 * s)));
+      WB.set([B[0], B[1], B[2], s], i * 4);
+      WL.set([fL[0], fL[1], fL[2], 0], i * 4);
+      WR.set([fR[0], fR[1], fR[2], 0], i * 4);
+      WC.set([chest[0], chest[1], chest[2], lean], i * 4);
+      const c = add(B, [0, 0.5 * s, 0]);
+      WS.set([c[0], c[1], c[2], Math.max(0.6 * s, len(sub(fL, c)), len(sub(fR, c))) + 0.1 * s], i * 4);
+    }
+    // one sphere round them all (a box's circumsphere)
+    const lo: V = [1e9, 1e9, 1e9], hi: V = [-1e9, -1e9, -1e9];
+    for (let i = 0; i < nw; i++)
+      for (let a = 0; a < 3; a++) {
+        lo[a] = Math.min(lo[a], WS[i * 4 + a] - WS[i * 4 + 3]);
+        hi[a] = Math.max(hi[a], WS[i * 4 + a] + WS[i * 4 + 3]);
+      }
+    const mid = mul(add(lo, hi), 0.5);
+    WALL.set([mid[0], mid[1], mid[2], nw ? 0.5 * len(sub(hi, lo)) : 0]);
+  }
 
   const scene: Scene & { look?: CityLook; stairs?: typeof ST } = {
     look,
@@ -182,7 +336,7 @@ export function createStairs(g: Gfx): Scene {
       const t = f.local;
       const g0 = grow(0x09), g2 = grow(0x0b), gStop = grow(0x0a, 48);
       const T = (row: number) => (row - g0) * 0.12; // global row → local seconds
-      // ---- music: Shepard (ch15) one note per beat, galop kicks, backbeat + the roll of 0A bar 3, the stop
+      // ---- music: Shepard (ch15) one note every 8 rows, galop kicks, backbeat + the roll of 0A bar 3, the stop
       const shep = onsets(f, 15, g0, gStop, shepFallback(g0, gStop)).map((x) => x - (f.t - t));
       const kicks = onsets(f, 1, g0, g2).map((x) => x - (f.t - t));
       const snares = onsets(f, 2, g0, gStop).map((x) => x - (f.t - t));
@@ -192,10 +346,15 @@ export function createStairs(g: Gfx): Scene {
       const kick = tStop < 0 ? pulse(kicks, t, 0.14) : 0;
       const snare = tStop < 0 ? pulse(snares, t, 0.1) : 0;
       const si = lastIndex(shep, tt);
-      const stepK = si < 0 ? 0 : si + easeOut((tt - shep[si]) / 0.14);
-      const notePulse = tStop < 0 ? pulse(shep, t, 0.25) : 0;
-      // the escalator: two treads per Shepard note; a lit tread rides it round and round
-      const m = 2 * stepK;
+      // the step of this note: 0 → 1 over STEP seconds from the note-on
+      const STEP = knob('step', 0.66);
+      const pStep = si < 0 ? 1 : Math.min(1, (tt - shep[si]) / STEP);
+      const steps = Math.max(0, si);
+      // the light flares as the first walker lands on its next tread
+      const notePulse = tStop < 0 ? pulse(shep.map((x) => x + 0.7 * STEP), t, 0.25) : 0;
+      // the escalator: ESC treads per Shepard note, moving with the walkers' step; a lit tread rides it
+      const ESC = knob('esc', 0);
+      const m = ESC * (si < 0 ? 0 : si + smooth(0.12, 0.88, pStep));
       const phi = m - Math.floor(m);
 
       // ---- the climb: one plain bar, then the vertigo in lurches on the kicks (and the roll)
@@ -205,6 +364,7 @@ export function createStairs(g: Gfx): Scene {
       const H = tt < tV ? 0 : RISE * (1.65 ** (6 * u) - 1);
       const lift: V = [0, H, 0];
       const S5 = add(ST.S5, lift), center = add(ST.center, lift);
+      const SIZE = knob('size', 16); // world height the frame holds at the stairs
       let pos: V, target: V = center, fov: number, roll = 0;
       const fovAt = (p: V) => (2 * Math.atan(SIZE / 2 / len(sub(p, center))) * 180) / Math.PI;
       if (tt < tV) {
@@ -223,6 +383,8 @@ export function createStairs(g: Gfx): Scene {
       const sn = lastIndex(snares, tt);
       roll += (sn % 2 ? 1 : -1) * 0.014 * snare;
       fov *= 1 - 0.03 * snare;
+      // the walkers past the seam are drawn near: the size that matches the far start from here
+      if (tStop < 0) cNear = len(sub(pos, S5)) / len(sub(pos, add(ST.S1, lift)));
 
       const HOLD = 0.36; // three rows of stillness after the hit
       if (tStop >= HOLD) {
@@ -240,6 +402,11 @@ export function createStairs(g: Gfx): Scene {
         roll = 0;
       }
       lastStop = tStop;
+      if (dbg.o.yaw) {
+        const a = dbg.o.yaw * (Math.PI / 180), c = Math.cos(a), s = Math.sin(a);
+        const r = sub(pos, target);
+        pos = add(target, [r[0] * c - r[2] * s, r[1], r[0] * s + r[2] * c]);
+      }
       const cam = lookAt(pos, target, fov, roll);
 
       // ---- flights (+ the fall after the stop)
@@ -253,26 +420,24 @@ export function createStairs(g: Gfx): Scene {
         FC.set([fl.width, fl.s0, fl.cn, phi], k * 4);
         FD.set([out[0], -drop, out[2], 0], k * 4);
       });
+      const nw = Math.min(MAXW, Math.round(knob('walkers', 12)));
+      const walk = knob('walk', 1);
+      walkers(nw, steps, pStep, walk, m, rig);
 
-      // ---- the lit tread: global tread M (it rides the escalator), found on its flight or winder
-      const M = Math.floor(m) % ST.N;
+
+      // ---- the lit tread (the creature's step): the tread the first walker stands on — it lights up
+      // as the walker lands on it, so the light climbs round and round with the file (with no walkers
+      // it rides the escalator); the near copy at the seam
+      const j0 = nw > 0 ? 1 + walk * (steps + (pStep >= 0.7 ? 1 : 0)) : 0;
+      const M = (((j0 + Math.floor(m)) % ST.N) + ST.N) % ST.N;
       let Sm = M + 0.5 + phi;
       if (Sm >= ST.N) Sm -= ST.N;
-      let mk = 0;
-      while (mk < 3 && Sm >= ST.flights[mk].s0 + ST.flights[mk].n + ST.flights[mk].cn) mk++;
-      const fm = ST.flights[mk];
-      const top = (M + 1 + phi - fm.s0) * fm.rise;
-      const lsm = Sm - fm.s0;
-      const fl0: V = [FA[mk * 4], FA[mk * 4 + 1], FA[mk * 4 + 2]];
-      const side: V = [-fm.u[2], 0, fm.u[0]];
-      let along: V;
-      if (lsm < fm.n) along = mul(fm.u, lsm * fm.run);
-      else {
-        const th = ((lsm - fm.n) * fm.run) / (fm.width / 2) - Math.PI / 2;
-        along = add(add(mul(fm.u, fm.n * fm.run + (fm.width / 2) * Math.cos(th)), mul(side, fm.width / 2 + (fm.width / 2) * Math.sin(th))), [0, 0, 0]);
-      }
+      const near = Sm < 1 + phi;
+      const mk = near ? 3 : flightOf(Sm);
+      const Sw = near ? Sm + ST.N : Sm;
+      const mp = place(mk, Sw).p;
       const markOn = tStop >= HOLD ? 0 : tStop >= 0 ? 3.0 : 1.6 + 2.4 * notePulse;
-      const mpos = add(fl0, add(along, [0, top + 0.1, 0]));
+      const mpos: V = [mp[0] + FD[mk * 4], ramp(mk, Sw + 0.5) + 0.1 + rig + FD[mk * 4 + 1], mp[2] + FD[mk * 4 + 2]];
 
       // bounds of the flights (+ their fall)
       const bmin: V = [1e9, 1e9, 1e9], bmax: V = [-1e9, -1e9, -1e9];
@@ -316,7 +481,20 @@ export function createStairs(g: Gfx): Scene {
           .set('uMark', M, ST.N, 0, 0)
           .set('uMarkPos', mpos[0], mpos[1], mpos[2], markOn)
           .set('uBoxMin', bmin[0] - pad, bmin[1] - pad, bmin[2] - pad)
-          .set('uBoxMax', bmax[0] + pad, bmax[1] + pad, bmax[2] + pad);
+          .set('uBoxMax', bmax[0] + pad, bmax[1] + pad, bmax[2] + pad)
+          .set('uWN', nw)
+          .set('uWB', WB)
+          .set('uWL', WL)
+          .set('uWR', WR)
+          .set('uWC', WC)
+          .set('uWS', WS)
+          .set('uWAll', WALL)
+          .set('uTreadAlb', ...TREAD)
+          .set('uRiserAlb', ...RISER)
+          .set('uStringer', ...STRINGER)
+          .set('uWalkCol', ...WALKER)
+          .set('uInkCol', ...INK)
+          .set('uInk', knob('inkpx', 1.1), knob('ink', 0.7), knob('band', 0.45), 0);
         gl.disable(gl.BLEND);
         fullscreen(g);
       }
@@ -333,7 +511,7 @@ export function createStairs(g: Gfx): Scene {
 
 function shepFallback(a: number, b: number) {
   const r: number[] = [];
-  for (let x = a; x < b; x += 4) r.push(x);
+  for (let x = a; x < b; x += 8) r.push(x);
   return r;
 }
 
