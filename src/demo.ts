@@ -61,9 +61,13 @@ export class Demo {
    * not at the scene cut: the first draw of a program costs 20–70 ms on the M4 (techcheck), more
    * for new target formats/blend states. One scene per tick keeps the loader animating.
    */
-  async warmup(onProgress?: (done: number, total: number) => void) {
+  /** canvas size the scenes were warmed at: size-dependent caches (bakes, TAA, cached stills) */
+  warmSize = '';
+
+  async warmup(onProgress?: (done: number, total: number) => void, keepSize = false) {
     const gl = this.g.gl;
-    this.resize();
+    if (!keepSize) this.resize();
+    this.warmSize = `${this.g.canvas.width}x${this.g.canvas.height}`;
     const ids = [...new Set(SCRIPT.map((c) => c.scene))];
     const px = new Uint8Array(4);
     const t0 = performance.now();
@@ -77,6 +81,13 @@ export class Demo {
       await new Promise((r) => setTimeout(r, 0));
     }
     console.log(`[gfx] pipeline warm-up ${ids.length} scenes in ${(performance.now() - t0).toFixed(0)} ms`);
+  }
+
+  /** the window changed size after the loader warmed the scenes (e.g. the fullscreen animation
+   *  finished late): warm again now, or every scene rebuilds its caches on its first frame */
+  async rewarmIfResized() {
+    this.resize();
+    if (`${this.g.canvas.width}x${this.g.canvas.height}` !== this.warmSize) await this.warmup(undefined, true);
   }
 
   resize() {

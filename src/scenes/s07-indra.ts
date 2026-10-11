@@ -127,6 +127,9 @@ export function createIndra(g: Gfx): Scene {
   // dev: globalThis.__s07.o = { row, … } pins the scene to a row and overrides parameters
   const dbg: { o: Record<string, number> } = import.meta.env.DEV ? ((globalThis as any).__s07 ??= { o: {} }) : { o: {} };
 
+  let notesFor: FrameCtx['audio'] | undefined = undefined;
+  let bellCache: { t: number; midi: number }[] = [];
+  let mirCache: number[] = [];
   function bellNotes(f: FrameCtx): { t: number; midi: number }[] {
     const notes = f.audio?.notes?.filter((n) => n.ch === CH.bell && n.grow >= START && n.grow < START + LEN);
     if (notes && notes.length) return notes.map((n) => ({ t: n.t, midi: n.midi }));
@@ -191,8 +194,13 @@ export function createIndra(g: Gfx): Scene {
       const unroll = ease(clamp01((r - 64) / 12));
 
       // --- bell: cascades in 2D, pearl lights in 3D
-      const bell = bellNotes(f);
-      const mir = mirrorTimes(f, bell);
+      // the note lists depend only on the render: pick them once, not every frame (GC hitches)
+      if (notesFor !== f.audio) {
+        bellCache = bellNotes(f);
+        mirCache = mirrorTimes(f, bellCache);
+        notesFor = f.audio;
+      }
+      const bell = bellCache, mir = mirCache;
       const events: { t: number; side: number; amp: number }[] = [];
       bell.forEach((b) => events.push({ t: b.t, side: 0, amp: 1 }));
       mir.forEach((m, i) => events.push({ t: m, side: i % 2 ? 1 : -1, amp: 0.6 })); // ch16 pans left, right, …

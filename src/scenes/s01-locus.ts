@@ -93,6 +93,7 @@ export function createLocus(g: Gfx): Scene {
   const pulses = new Float32Array(8 * 4);
   const beam = new Beam(g);
   let beamIdle = false;
+  const cue: { audio: FrameCtx['audio'] | undefined; bell: number[]; harp: { t: number; midi: number }[] } = { audio: undefined, bell: [], harp: [] };
   beam.style = { sigmaPx: 1.4, tau: 0.25, intensity: 120, tint: [0.62, 0.55, 0.75] };
   let lastU = 0;
   // where the anomaly sits: just inside the locus at 505 nm — a green no screen here can show
@@ -111,12 +112,18 @@ export function createLocus(g: Gfx): Scene {
       const m = markerTimes(f.audio, 'F-4', START_ROW, START_ROW + 2 * ROWS, [0, 16, 32, 48].map((r) => START_ROW + r));
       const [m0, m1, m2, m3] = [m[0], m[1] ?? m[0] + 1.92, m[2] ?? m[0] + 3.84, m[3] ?? m[0] + 5.76];
       const s0 = START_ROW * ROW;
-      // 02: the bell's second C-A-G-E (ch13) and the harp (ch14), from the track or the score's rows
-      const notes = (ch: number) => f.audio?.notes?.filter((n) => n.ch === ch && n.grow >= P02 && n.grow < P02 + ROWS);
-      const bellN = notes(CH.bell);
-      const [b0, b1, b2, b3] = bellN && bellN.length >= 4 ? bellN.map((n) => n.t) : [0, 16, 32, 48].map((r) => (P02 + r) * ROW);
-      const harpN = notes(CH.pluck);
-      const harp = harpN?.length ? harpN.map((n) => ({ t: n.t, midi: n.midi })) : HARP_FALLBACK.map((n) => ({ t: n.grow * ROW, midi: n.midi }));
+      // 02: the bell's second C-A-G-E (ch13) and the harp (ch14), from the track or the score's rows;
+      // picked out of the track's ~5000 notes once per render, not every frame (garbage → GC hitches)
+      if (cue.audio !== f.audio) {
+        const notes = (ch: number) => f.audio?.notes?.filter((n) => n.ch === ch && n.grow >= P02 && n.grow < P02 + ROWS);
+        const bellN = notes(CH.bell);
+        cue.bell = bellN && bellN.length >= 4 ? bellN.map((n) => n.t) : [0, 16, 32, 48].map((r) => (P02 + r) * ROW);
+        const harpN = notes(CH.pluck);
+        cue.harp = harpN?.length ? harpN.map((n) => ({ t: n.t, midi: n.midi })) : HARP_FALLBACK.map((n) => ({ t: n.grow * ROW, midi: n.midi }));
+        cue.audio = f.audio;
+      }
+      const [b0, b1, b2, b3] = cue.bell;
+      const harp = cue.harp;
 
       // view: the diagram, framed for 16:10. From the last bell note (E, 02:48) everything but the
       // Display P3 triangle dissolves, and in the last bar the triangle flies onto the 600-cell face

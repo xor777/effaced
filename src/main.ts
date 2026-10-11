@@ -41,7 +41,18 @@ async function main() {
 
   // START was the user gesture: sound + fullscreen now
   ctx.resume().catch(() => {});
-  if (setup.fullscreen) document.documentElement.requestFullscreen?.().catch(() => {});
+  // the scenes warm their size-dependent caches in the loader: let the fullscreen animation finish
+  // first (the size settles ~0.5–1 s after the request on macOS), or wait at most 1.5 s
+  let fsReady: Promise<unknown> = Promise.resolve();
+  if (setup.fullscreen && document.documentElement.requestFullscreen) {
+    fsReady = Promise.race([
+      document.documentElement.requestFullscreen().then(
+        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+        () => {},
+      ),
+      new Promise((r) => setTimeout(r, 1500)),
+    ]);
+  }
   if (setup.sound !== 'webaudio') {
     pa = 0;
     music = render(setup.sound); // the GUS / SB16 joke modes need their own render
@@ -69,6 +80,7 @@ async function main() {
         pg = d / n;
         report('compiling shaders');
       })
+      .then(() => fsReady)
       .then(() =>
         demo.warmup((d, n) => {
           pw = d / n;
@@ -88,6 +100,7 @@ async function main() {
     clock.attach(ctx, buf);
   } else clock.attach(ctx, null);
 
+  await demo.rewarmIfResized();
   await loader?.finish();
   // from the cut to white (S15) the tab is '#FACE'
   const faceAt = cueStart(SCRIPT.find((c) => c.scene === 'S15')!);

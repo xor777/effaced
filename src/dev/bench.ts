@@ -36,6 +36,9 @@ export async function runBench(demo: Demo, size: string | null) {
   const c = demo.g.canvas;
   c.width = w;
   c.height = h;
+  // the loader warmed the scenes at the window's size: warm again at the bench size, or every
+  // first frame of a scene would measure its cache rebuild (bakes, TAA targets, cached stills)
+  await demo.warmup(undefined, true);
   const px = new Uint8Array(4);
   const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
   const yieldUi = () => new Promise((r) => setTimeout(r, 0));
