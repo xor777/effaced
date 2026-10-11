@@ -21,6 +21,27 @@
  │                                                                            │
  └────────────────────────────────────────────────────────────────────────────┘
 
+ ┌─[ story ]──────────────────────────────────────────────────────────────────┐
+ │                                                                            │
+ │   64k is 65536 bytes, and one did not fit. this is the story of that       │
+ │   one: the 65537th byte, a creature made of everything a machine has no    │
+ │   room for. it lives in the seventeenth channel of a sixteen-channel       │
+ │   tracker, in rounding errors, in the space between two frames.            │
+ │                                                                            │
+ │   the world it wakes up in is a cage: the triangle of your monitor's       │
+ │   colours, a polytope turning in four dimensions, an endless city with     │
+ │   no thickness, a staircase that goes nowhere. it only shows at the        │
+ │   edges: a note that lands outside the triangle, a reflection that         │
+ │   should not be there.                                                     │
+ │                                                                            │
+ │   the machine answers by effacing it. it compresses the world into 8×8     │
+ │   blocks and turns it inside out. the creature breaks out through the      │
+ │   frame of the canvas itself and burns down to a single point.             │
+ │                                                                            │
+ │   65536 + 1. the demo never says who the one is.                           │
+ │                                                                            │
+ └────────────────────────────────────────────────────────────────────────────┘
+
  ┌─[ credits ]────────────────────────────────────────────────────────────────┐
  │                                                                            │
  │        code     opus                                                       │
